@@ -118,6 +118,7 @@ const main = (argv: string[]) => {
   program
     .command('watch-deps')
     .option('--build', 'Build all dependencies on startup')
+    .option('--self', 'Include own package in the list of watched dependencies')
     .description('Watch all dependencies while running another command')
     .action(lazyAction(() => import('./commands/watch-deps'), 'default'));
 

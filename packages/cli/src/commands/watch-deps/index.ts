@@ -34,6 +34,9 @@ export default async (cmd: Command, args: string[]) => {
   if (cmd.build) {
     options.build = true;
   }
+  if (cmd.self) {
+    options.includeSelf = true;
+  }
 
   await watchDeps(options);
 

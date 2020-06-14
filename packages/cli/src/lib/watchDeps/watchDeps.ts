@@ -32,6 +32,7 @@ const WATCH_LOCATIONS = ['package.json', 'src', 'assets'];
 
 export type Options = {
   build?: boolean;
+  includeSelf?: boolean;
 };
 
 // Start watching for dependency changes.
@@ -53,7 +54,11 @@ export async function watchDeps(options: Options = {}) {
   const packageJson = JSON.parse(packageData);
   const packageName = packageJson.name;
 
-  const deps = await findAllDeps(packageName, PACKAGE_BLACKLIST);
+  const deps = await findAllDeps({
+    rootPackageName: packageName,
+    blacklist: PACKAGE_BLACKLIST,
+    includeSelf: Boolean(options.includeSelf),
+  });
 
   if (options.build) {
     await run('lerna', [
@@ -66,14 +71,18 @@ export async function watchDeps(options: Options = {}) {
   }
 
   // We lazily watch all our deps, as in we don't start the actual watch compiler until a change is detected
-  const watcher = await startWatcher(deps, WATCH_LOCATIONS, (pkg) => {
-    startCompiler(pkg, createLogPipe(pkg.name)).promise.catch((error) => {
+  const watcher = await startWatcher(deps, WATCH_LOCATIONS, pkg => {
+    startCompiler(pkg, createLogPipe(pkg.name)).promise.catch(error => {
       process.stderr.write(`${error}\n`);
     });
   });
 
   await startPackageWatcher(localPackagePath, async () => {
-    const newDeps = await findAllDeps(packageName, PACKAGE_BLACKLIST);
+    const newDeps = await findAllDeps({
+      rootPackageName: packageName,
+      blacklist: PACKAGE_BLACKLIST,
+      includeSelf: Boolean(options.includeSelf),
+    });
     await watcher.update(newDeps);
   });
 }

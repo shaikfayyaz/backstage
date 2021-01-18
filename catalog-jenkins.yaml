@@ -5,7 +5,7 @@ metadata:
   description: |
     Backstage is an open-source developer portal that puts the developer experience first.
   annotations:
-    jenkins.io/github-folder: 'JenkinsMaintenanceJobs/aqua'
+    jenkins.io/github-folder: 'JenkinsMaintenanceJobs/Jenkins_Integration'
 spec:
   type: service
   owner: jenkins

@@ -14,18 +14,24 @@
  * limitations under the License.
  */
 
+import { AppConfig, JsonObject, JsonValue } from '@backstage/config';
+import { basename } from 'path';
 import yaml from 'yaml';
-import { isObject } from './utils';
-import { JsonValue, JsonObject } from '@backstage/config';
 import { ReaderContext } from './types';
+import { isObject } from './utils';
 
 /**
  * Reads and parses, and validates, and transforms a single config file.
  * The transformation rewrites any special values, like the $secret key.
  */
-export async function readConfigFile(filePath: string, ctx: ReaderContext) {
+export async function readConfigFile(
+  filePath: string,
+  ctx: ReaderContext,
+): Promise<AppConfig> {
   const configYaml = await ctx.readFile(filePath);
   const config = yaml.parse(configYaml);
+
+  const context = basename(filePath);
 
   async function transform(
     obj: JsonValue,
@@ -48,13 +54,35 @@ export async function readConfigFile(filePath: string, ctx: ReaderContext) {
       return arr;
     }
 
+    // TODO(Rugvip): This form of declaring secrets is deprecated, warn and remove in the future
     if ('$secret' in obj) {
+      console.warn(
+        `Deprecated secret declaration at '${path}' in '${context}', use $env, $file, etc. instead`,
+      );
       if (!isObject(obj.$secret)) {
         throw TypeError(`Expected object at secret ${path}.$secret`);
       }
 
       try {
-        return await ctx.readSecret(obj.$secret);
+        return await ctx.readSecret(path, obj.$secret);
+      } catch (error) {
+        throw new Error(`Invalid secret at ${path}: ${error.message}`);
+      }
+    }
+
+    // Check if there's any key that starts with a '$', in that case we treat
+    // this entire object as a secret.
+    const [secretKey] = Object.keys(obj).filter(key => key.startsWith('$'));
+    if (secretKey) {
+      if (Object.keys(obj).length !== 1) {
+        throw new Error(
+          `Secret key '${secretKey}' has adjacent keys at ${path}`,
+        );
+      }
+      try {
+        return await ctx.readSecret(path, {
+          [secretKey.slice(1)]: obj[secretKey],
+        });
       } catch (error) {
         throw new Error(`Invalid secret at ${path}: ${error.message}`);
       }
@@ -63,9 +91,12 @@ export async function readConfigFile(filePath: string, ctx: ReaderContext) {
     const out: JsonObject = {};
 
     for (const [key, value] of Object.entries(obj)) {
-      const result = await transform(value, `${path}.${key}`);
-      if (result !== undefined) {
-        out[key] = result;
+      // undefined covers optional fields
+      if (value !== undefined) {
+        const result = await transform(value, `${path}.${key}`);
+        if (result !== undefined) {
+          out[key] = result;
+        }
       }
     }
 
@@ -76,5 +107,5 @@ export async function readConfigFile(filePath: string, ctx: ReaderContext) {
   if (!isObject(finalConfig)) {
     throw new TypeError('Expected object at config root');
   }
-  return finalConfig;
+  return { data: finalConfig, context };
 }

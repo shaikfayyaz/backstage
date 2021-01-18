@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-import React, { FC } from 'react';
-import { Typography, makeStyles } from '@material-ui/core';
 import { BackstageTheme } from '@backstage/theme';
+import { makeStyles, Typography } from '@material-ui/core';
 import ErrorOutline from '@material-ui/icons/ErrorOutline';
+import React from 'react';
 
-const useErrorOutlineStyles = makeStyles<BackstageTheme>((theme) => ({
+const useErrorOutlineStyles = makeStyles<BackstageTheme>(theme => ({
   root: {
     marginRight: theme.spacing(1),
     fill: theme.palette.warningText,
@@ -30,7 +30,7 @@ const ErrorOutlineStyled = () => {
   return <ErrorOutline classes={classes} />;
 };
 
-const useStyles = makeStyles<BackstageTheme>((theme) => ({
+const useStyles = makeStyles<BackstageTheme>(theme => ({
   message: {
     display: 'flex',
     flexDirection: 'column',
@@ -60,9 +60,10 @@ const useStyles = makeStyles<BackstageTheme>((theme) => ({
 type Props = {
   message?: React.ReactNode;
   title?: string;
+  children?: React.ReactNode;
 };
 
-const WarningPanel: FC<Props> = (props) => {
+export const WarningPanel = (props: Props) => {
   const classes = useStyles(props);
   const { title, message, children } = props;
   return (
@@ -82,5 +83,3 @@ const WarningPanel: FC<Props> = (props) => {
     </div>
   );
 };
-
-export default WarningPanel;

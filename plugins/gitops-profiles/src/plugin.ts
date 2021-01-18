@@ -14,16 +14,25 @@
  * limitations under the License.
  */
 
-import { createPlugin } from '@backstage/core';
+import { createPlugin, createApiFactory } from '@backstage/core';
 import ProfileCatalog from './components/ProfileCatalog';
 import ClusterPage from './components/ClusterPage';
 import ClusterList from './components/ClusterList';
+import {
+  gitOpsClusterListRoute,
+  gitOpsClusterDetailsRoute,
+  gitOpsClusterCreateRoute,
+} from './routes';
+import { gitOpsApiRef, GitOpsRestApi } from './api';
 
 export const plugin = createPlugin({
   id: 'gitops-profiles',
+  apis: [
+    createApiFactory(gitOpsApiRef, new GitOpsRestApi('http://localhost:3008')),
+  ],
   register({ router }) {
-    router.registerRoute('/gitops-clusters', ClusterList);
-    router.registerRoute('/gitops-cluster/:owner/:repo', ClusterPage);
-    router.registerRoute('/gitops-cluster-create', ProfileCatalog);
+    router.addRoute(gitOpsClusterListRoute, ClusterList);
+    router.addRoute(gitOpsClusterDetailsRoute, ClusterPage);
+    router.addRoute(gitOpsClusterCreateRoute, ProfileCatalog);
   },
 });

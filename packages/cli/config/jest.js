@@ -25,43 +25,82 @@ async function getConfig() {
     return require(path.resolve('jest.config.ts'));
   }
 
-  const moduleNameMapper = {
-    '\\.(css|less|scss|sss|styl)$': require.resolve('jest-css-modules'),
-  };
+  // We read all "jest" config fields in package.json files all the way to the filesystem root.
+  // All configs are merged together to create the final config, with longer paths taking precedence.
+  // The merging of the configs is shallow, meaning e.g. all transforms are replaced if new ones are defined.
+  const pkgJsonConfigs = [];
+  let currentPath = process.cwd();
 
-  // Only point to src/ if we're not in CI, there we just build packages first anyway
-  if (!process.env.CI) {
-    const LernaProject = require('@lerna/project');
-    const project = new LernaProject(path.resolve('.'));
-    const packages = await project.getPackages();
-
-    // To avoid having to build all deps inside the monorepo before running tests,
-    // we point directory to src/ where applicable.
-    // For example, @backstage/core = <repo-root>/packages/core/src/index.ts is added to moduleNameMapper
-    for (const pkg of packages) {
-      const mainSrc = pkg.get('main:src');
-      if (mainSrc) {
-        moduleNameMapper[`^${pkg.name}$`] = path.resolve(pkg.location, mainSrc);
+  // Some sanity check to avoid infinite loop
+  for (let i = 0; i < 100; i++) {
+    const packagePath = path.resolve(currentPath, 'package.json');
+    const exists = fs.pathExistsSync(packagePath);
+    if (exists) {
+      try {
+        const data = fs.readJsonSync(packagePath);
+        if (data.jest) {
+          pkgJsonConfigs.unshift(data.jest);
+        }
+      } catch (error) {
+        throw new Error(
+          `Failed to parse package.json file reading jest configs, ${error}`,
+        );
       }
     }
+
+    const newPath = path.dirname(currentPath);
+    if (newPath === currentPath) {
+      break;
+    }
+    currentPath = newPath;
   }
+
+  // We add an additional Jest config parameter only known by the Backstage CLI
+  // called `transformModules`. It's a list of modules that we want to apply
+  // our configured jest transformations for.
+  // This is useful when packages are published in untranspiled ESM or TS form.
+  const transformModules = pkgJsonConfigs
+    .flatMap(conf => {
+      const modules = conf.transformModules || [];
+      delete conf.transformModules;
+      return modules;
+    })
+    .map(name => `${name}/`)
+    .join('|');
+  const transformModulePattern = transformModules && `(?!${transformModules})`;
 
   const options = {
     rootDir: path.resolve('src'),
     coverageDirectory: path.resolve('coverage'),
     collectCoverageFrom: ['**/*.{js,jsx,ts,tsx}', '!**/*.d.ts'],
-    moduleNameMapper,
+    moduleNameMapper: {
+      '\\.(css|less|scss|sss|styl)$': require.resolve('jest-css-modules'),
+    },
+
+    globals: {
+      'ts-jest': {
+        isolatedModules: true,
+      },
+    },
 
     // We build .esm.js files with plugin:build, so to be able to load these in tests they need to be transformed
     // TODO: jest is working on module support, it's possible that we can remove this in the future
     transform: {
       '\\.esm\\.js$': require.resolve('jest-esm-transformer'),
-      '\\.(js|jsx|ts|tsx)': require.resolve('ts-jest'),
+      '\\.(js|jsx|ts|tsx)$': require.resolve('ts-jest'),
+      '\\.(bmp|gif|jpg|jpeg|png|frag|xml|svg)$': require.resolve(
+        './jestFileTransform.js',
+      ),
     },
+
+    // A bit more opinionated
+    testMatch: ['**/?(*.)test.{js,jsx,mjs,ts,tsx}'],
 
     // Default behaviour is to not apply transforms for node_modules, but we still want
     // to apply the esm-transformer to .esm.js files, since that's what we use in backstage packages.
-    transformIgnorePatterns: ['/node_modules/(?!.*\\.esm\\.js$)'],
+    transformIgnorePatterns: [
+      `/node_modules/${transformModulePattern}.*\\.(?:(?<!esm\\.)js|json)$`,
+    ],
   };
 
   // Use src/setupTests.ts as the default location for configuring test env
@@ -69,13 +108,7 @@ async function getConfig() {
     options.setupFilesAfterEnv = ['<rootDir>/setupTests.ts'];
   }
 
-  return {
-    ...options,
-
-    // If the package has a jest object in package.json we merge that config in. This is the recommended
-    // location for configuring tests.
-    ...require(path.resolve('package.json')).jest,
-  };
+  return Object.assign(options, ...pkgJsonConfigs);
 }
 
 module.exports = getConfig();

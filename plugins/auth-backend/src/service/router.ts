@@ -17,79 +17,130 @@
 import express from 'express';
 import Router from 'express-promise-router';
 import cookieParser from 'cookie-parser';
-import bodyParser from 'body-parser';
 import { Logger } from 'winston';
-import { createAuthProviderRouter } from '../providers';
+import {
+  defaultAuthProviderFactories,
+  AuthProviderFactory,
+} from '../providers';
+import {
+  NotFoundError,
+  PluginDatabaseManager,
+  PluginEndpointDiscovery,
+} from '@backstage/backend-common';
+import { CatalogClient } from '@backstage/catalog-client';
+import { Config } from '@backstage/config';
+import { createOidcRouter, DatabaseKeyStore, TokenFactory } from '../identity';
+import session from 'express-session';
+import passport from 'passport';
+
+type ProviderFactories = { [s: string]: AuthProviderFactory };
 
 export interface RouterOptions {
   logger: Logger;
+  database: PluginDatabaseManager;
+  config: Config;
+  discovery: PluginEndpointDiscovery;
+  providerFactories?: ProviderFactories;
 }
 
-export async function createRouter(
-  options: RouterOptions,
-): Promise<express.Router> {
+export async function createRouter({
+  logger,
+  config,
+  discovery,
+  database,
+  providerFactories,
+}: RouterOptions): Promise<express.Router> {
   const router = Router();
-  const logger = options.logger.child({ plugin: 'auth' });
 
-  router.use(cookieParser());
-  router.use(bodyParser.urlencoded({ extended: false }));
-  router.use(bodyParser.json());
+  const appUrl = config.getString('app.baseUrl');
+  const authUrl = await discovery.getExternalBaseUrl('auth');
 
-  // TODO: read from app config
-  const config = {
-    backend: {
-      baseUrl: 'http://localhost:7000',
-    },
-    auth: {
-      providers: {
-        google: {
-          development: {
-            appOrigin: 'http://localhost:3000',
-            secure: false,
-            clientId: process.env.AUTH_GOOGLE_CLIENT_ID!,
-            clientSecret: process.env.AUTH_GOOGLE_CLIENT_SECRET!,
-          },
-          production: {
-            appOrigin: 'http://localhost:3000',
-            secure: false,
-            clientId: '',
-            clientSecret: '',
-          },
-        },
-        github: {
-          development: {
-            appOrigin: 'http://localhost:3000',
-            secure: false,
-            clientId: process.env.AUTH_GITHUB_CLIENT_ID!,
-            clientSecret: process.env.AUTH_GITHUB_CLIENT_SECRET!,
-          },
-        },
-        saml: {
-          development: {
-            entryPoint: 'http://localhost:7001/',
-            issuer: 'passport-saml',
-          },
-        },
-      },
-    },
+  const keyDurationSeconds = 3600;
+
+  const keyStore = await DatabaseKeyStore.create({
+    database: await database.getClient(),
+  });
+  const tokenIssuer = new TokenFactory({
+    issuer: authUrl,
+    keyStore,
+    keyDurationSeconds,
+    logger: logger.child({ component: 'token-factory' }),
+  });
+  const catalogApi = new CatalogClient({ discoveryApi: discovery });
+
+  const secret = config.getOptionalString('auth.session.secret');
+  if (secret) {
+    router.use(cookieParser(secret));
+    // TODO: Configure the server-side session storage.  The default MemoryStore is not designed for production
+    router.use(session({ secret, saveUninitialized: false, resave: false }));
+    router.use(passport.initialize());
+    router.use(passport.session());
+  } else {
+    router.use(cookieParser());
+  }
+  router.use(express.urlencoded({ extended: false }));
+  router.use(express.json());
+
+  const allProviderFactories = {
+    ...defaultAuthProviderFactories,
+    ...providerFactories,
   };
+  const providersConfig = config.getConfig('auth.providers');
+  const providers = providersConfig.keys();
 
-  const providerConfigs = config.auth.providers;
-
-  for (const [providerId, providerConfig] of Object.entries(providerConfigs)) {
-    const baseUrl = `${config.backend.baseUrl}/auth`;
+  for (const providerId of providers) {
     logger.info(`Configuring provider, ${providerId}`);
     try {
-      const providerRouter = createAuthProviderRouter(
+      const providerFactory = allProviderFactories[providerId];
+      if (!providerFactory) {
+        throw Error(`No auth provider available for '${providerId}'`);
+      }
+
+      const provider = providerFactory({
         providerId,
-        { baseUrl },
-        providerConfig,
+        globalConfig: { baseUrl: authUrl, appUrl },
+        config: providersConfig.getConfig(providerId),
         logger,
-      );
-      router.use(`/${providerId}`, providerRouter);
+        tokenIssuer,
+        discovery,
+        catalogApi,
+      });
+
+      const r = Router();
+
+      r.get('/start', provider.start.bind(provider));
+      r.get('/handler/frame', provider.frameHandler.bind(provider));
+      r.post('/handler/frame', provider.frameHandler.bind(provider));
+      if (provider.logout) {
+        r.post('/logout', provider.logout.bind(provider));
+      }
+      if (provider.refresh) {
+        r.get('/refresh', provider.refresh.bind(provider));
+      }
+
+      router.use(`/${providerId}`, r);
     } catch (e) {
-      logger.error(e.message);
+      if (process.env.NODE_ENV !== 'development') {
+        throw new Error(
+          `Failed to initialize ${providerId} auth provider, ${e.message}`,
+        );
+      }
+
+      logger.warn(`Skipping ${providerId} auth provider, ${e.message}`);
     }
   }
+
+  router.use(
+    createOidcRouter({
+      tokenIssuer,
+      baseUrl: authUrl,
+    }),
+  );
+
+  router.use('/:provider/', req => {
+    const { provider } = req.params;
+    throw new NotFoundError(`No auth provider registered for '${provider}'`);
+  });
+
   return router;
 }

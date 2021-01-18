@@ -38,12 +38,16 @@ type EnvSecret = {
 type DataSecret = {
   // Path to the data secret file, relative to the config file.
   data: string;
-  // The path to the value inside the data file.
-  // Either a '.' separated list, or an array of path segments.
-  path: string | string[];
+  // The path to the value inside the data file, each element separated by '.'.
+  path?: string;
 };
 
-type Secret = FileSecret | EnvSecret | DataSecret;
+// TODO(Rugvip): Move this out of secret reading when we remove the deprecated DataSecret and $secret format
+type IncludeSecret = {
+  include: string;
+};
+
+type Secret = FileSecret | EnvSecret | DataSecret | IncludeSecret;
 
 // Schema for each type of secret description
 const secretLoaderSchemas = {
@@ -55,17 +59,14 @@ const secretLoaderSchemas = {
   }),
   data: yup.object({
     data: yup.string().required(),
-    path: yup.lazy(value => {
-      if (typeof value === 'string') {
-        return yup.string().required();
-      }
-      return yup.array().of(yup.string().required()).required();
-    }),
+  }),
+  include: yup.object({
+    include: yup.string().required(),
   }),
 };
 
 // The top-level secret schema, which figures out what type of secret it is.
-const secretSchema = yup.lazy<object>(value => {
+const secretSchema = yup.lazy<object | undefined>(value => {
   if (typeof value !== 'object' || value === null) {
     return yup.object().required().label('secret');
   }
@@ -101,7 +102,7 @@ const dataSecretParser: {
 export async function readSecret(
   data: JsonObject,
   ctx: ReaderContext,
-): Promise<string | undefined> {
+): Promise<JsonValue | undefined> {
   const secret = secretSchema.validateSync(data, { strict: true }) as Secret;
 
   if ('file' in secret) {
@@ -111,28 +112,67 @@ export async function readSecret(
     return ctx.env[secret.env];
   }
   if ('data' in secret) {
-    const ext = extname(secret.data);
+    console.warn(
+      `Configuration uses deprecated $data key, use $include instead.`,
+    );
+    const url =
+      'path' in secret ? `${secret.data}#${secret.path}` : secret.data;
+    const [filePath, dataPath] = url.split(/#(.*)/);
+    if (!dataPath) {
+      throw new Error(
+        `Invalid format for data secret value, must be of the form <filepath>#<datapath>, got '${url}'`,
+      );
+    }
+
+    const ext = extname(filePath);
     const parser = dataSecretParser[ext];
     if (!parser) {
       throw new Error(`No data secret parser available for extension ${ext}`);
     }
 
-    const content = await ctx.readFile(secret.data);
+    const content = await ctx.readFile(filePath);
 
-    const { path } = secret;
-    const parts = typeof path === 'string' ? path.split('.') : path;
+    const parts = dataPath.split('.');
 
-    let value: JsonValue = await parser(content);
+    let value: JsonValue | undefined = await parser(content);
     for (const [index, part] of parts.entries()) {
       if (!isObject(value)) {
         const errPath = parts.slice(0, index).join('.');
-        throw new Error(
-          `Value is not an object at ${errPath} in ${secret.data}`,
-        );
+        throw new Error(`Value is not an object at ${errPath} in ${filePath}`);
       }
       value = value[part];
     }
+
     return String(value);
+  }
+  if ('include' in secret) {
+    const [filePath, dataPath] = secret.include.split(/#(.*)/);
+
+    const ext = extname(filePath);
+    const parser = dataSecretParser[ext];
+    if (!parser) {
+      throw new Error(`No data secret parser available for extension ${ext}`);
+    }
+
+    const content = await ctx.readFile(filePath);
+
+    const parts = dataPath ? dataPath.split('.') : [];
+
+    let value: JsonValue | undefined;
+    try {
+      value = await parser(content);
+    } catch (error) {
+      throw new Error(`Failed to parse included file ${filePath}, ${error}`);
+    }
+    for (const [index, part] of parts.entries()) {
+      if (!isObject(value)) {
+        const errPath = parts.slice(0, index).join('.');
+        throw new Error(`Value is not an object at ${errPath} in ${filePath}`);
+      }
+      value = value[part];
+    }
+
+    return value;
   }
 
   isNever<typeof secret>();

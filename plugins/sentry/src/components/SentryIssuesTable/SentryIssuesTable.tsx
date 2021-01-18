@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import React, { FC } from 'react';
+import React from 'react';
 import { Table, TableColumn } from '@backstage/core';
-import { SentryIssue } from '../../data/sentry-issue';
+import { SentryIssue } from '../../api';
 import { format } from 'timeago.js';
 import { ErrorCell } from '../ErrorCell/ErrorCell';
 import { ErrorGraph } from '../ErrorGraph/ErrorGraph';
@@ -60,11 +60,11 @@ type SentryIssuesTableProps = {
   sentryIssues: SentryIssue[];
 };
 
-const SentryIssuesTable: FC<SentryIssuesTableProps> = ({ sentryIssues }) => {
+const SentryIssuesTable = ({ sentryIssues }: SentryIssuesTableProps) => {
   return (
     <Table
       columns={columns}
-      options={{ paging: true, search: false, pageSize: 5 }}
+      options={{ padding: 'dense', paging: true, search: false, pageSize: 5 }}
       title="Sentry issues"
       data={sentryIssues}
     />

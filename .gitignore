@@ -1,13 +1,13 @@
-.idea/
+# macOS
 .DS_Store
+
+# IntelliJ
+.idea/
+*.iml
+
+# Visual Studio Code
 .vscode/
 .vsls.json
-
-# @spotify/web-script build output
-cjs/
-esm/
-types/
-build/
 
 # Logs
 logs
@@ -61,6 +61,9 @@ typings/
 # Optional npm cache directory
 .npm
 
+# Node version directives
+.nvmrc
+
 # Optional eslint cache
 .eslintcache
 
@@ -92,6 +95,8 @@ typings/
 # Nuxt.js build / generate output
 .nuxt
 dist
+dist-types
+dist-workspace
 
 # Gatsby files
 .cache/
@@ -116,3 +121,15 @@ dist
 
 # Stores VSCode versions used for testing VSCode extensions
 .vscode-test
+
+# Temporary change files created by Vim
+*.swp
+
+# MkDocs build output
+site
+
+# Local configuration files
+*.local.yaml
+
+# Sensitive credentials
+*-credentials.yaml

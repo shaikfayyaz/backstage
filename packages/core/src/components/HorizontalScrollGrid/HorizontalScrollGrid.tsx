@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import React, { FC } from 'react';
+import React, { PropsWithChildren } from 'react';
 import classNames from 'classnames';
 import ChevronLeftIcon from '@material-ui/icons/ChevronLeft';
 import ChevronRightIcon from '@material-ui/icons/ChevronRight';
@@ -181,7 +181,7 @@ function useSmoothScroll(
   return setScrollTarget;
 }
 
-const HorizontalScrollGrid: FC<Props> = props => {
+export const HorizontalScrollGrid = (props: PropsWithChildren<Props>) => {
   const {
     scrollStep = 100,
     scrollSpeed = 50,
@@ -245,5 +245,3 @@ const HorizontalScrollGrid: FC<Props> = props => {
     </div>
   );
 };
-
-export default HorizontalScrollGrid;

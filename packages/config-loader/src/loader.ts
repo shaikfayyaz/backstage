@@ -15,21 +15,19 @@
  */
 
 import fs from 'fs-extra';
-import { resolve as resolvePath, dirname } from 'path';
-import { AppConfig, JsonObject } from '@backstage/config';
-import {
-  resolveStaticConfig,
-  readConfigFile,
-  readEnv,
-  readSecret,
-} from './lib';
+import { resolve as resolvePath, dirname, isAbsolute } from 'path';
+import { AppConfig, JsonObject, JsonValue } from '@backstage/config';
+import { readConfigFile, readEnvConfig, readSecret } from './lib';
 
 export type LoadConfigOptions = {
-  // Config path, defaults to app-config.yaml in project root
-  configPath?: string;
+  // The root directory of the config loading context. Used to find default configs.
+  configRoot: string;
 
-  // Whether to read secrets or omit them, defaults to false.
-  shouldReadSecrets?: boolean;
+  // Absolute paths to load config files from. Configs from earlier paths have lower priority.
+  configPaths: string[];
+
+  // TODO(Rugvip): This will be removed in the future, but for now we use it to warn about possible mistakes.
+  env: string;
 };
 
 class Context {
@@ -37,7 +35,6 @@ class Context {
     private readonly options: {
       env: { [name in string]?: string };
       rootPath: string;
-      shouldReadSecrets: boolean;
     },
   ) {}
 
@@ -49,32 +46,52 @@ class Context {
     return fs.readFile(resolvePath(this.options.rootPath, path), 'utf8');
   }
 
-  async readSecret(desc: JsonObject): Promise<string | undefined> {
-    if (!this.options.shouldReadSecrets) {
-      return undefined;
-    }
-
+  async readSecret(
+    _path: string,
+    desc: JsonObject,
+  ): Promise<JsonValue | undefined> {
     return readSecret(desc, this);
   }
 }
 
 export async function loadConfig(
-  options: LoadConfigOptions = {},
+  options: LoadConfigOptions,
 ): Promise<AppConfig[]> {
   const configs = [];
+  const { configRoot } = options;
+  const configPaths = options.configPaths.slice();
 
-  configs.push(...readEnv(process.env));
+  // If no paths are provided, we default to reading
+  // `app-config.yaml` and, if it exists, `app-config.local.yaml`
+  if (configPaths.length === 0) {
+    configPaths.push(resolvePath(configRoot, 'app-config.yaml'));
 
-  const configPaths = await resolveStaticConfig(options);
+    const localConfig = resolvePath(configRoot, 'app-config.local.yaml');
+    if (await fs.pathExists(localConfig)) {
+      configPaths.push(localConfig);
+    }
+
+    const envFile = `app-config.${options.env}.yaml`;
+    if (await fs.pathExists(resolvePath(configRoot, envFile))) {
+      console.error(
+        `Env config file '${envFile}' is not loaded as APP_ENV and NODE_ENV-based config loading has been removed`,
+      );
+      console.error(
+        `To load the config file, use --config <path>, listing every config file that you want to load`,
+      );
+    }
+  }
 
   try {
     for (const configPath of configPaths) {
+      if (!isAbsolute(configPath)) {
+        throw new Error(`Config load path is not absolute: '${configPath}'`);
+      }
       const config = await readConfigFile(
         configPath,
         new Context({
           env: process.env,
           rootPath: dirname(configPath),
-          shouldReadSecrets: Boolean(options.shouldReadSecrets),
         }),
       );
 
@@ -85,6 +102,8 @@ export async function loadConfig(
       `Failed to read static configuration file: ${error.message}`,
     );
   }
+
+  configs.push(...readEnvConfig(process.env));
 
   return configs;
 }

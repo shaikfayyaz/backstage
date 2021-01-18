@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-import { ServiceBuilderImpl } from './ServiceBuilderImpl';
+import { ServiceBuilderImpl } from './lib/ServiceBuilderImpl';
 
 /**
  * Creates a new service builder.
  */
-export function createServiceBuilder() {
-  return new ServiceBuilderImpl();
+export function createServiceBuilder(_module: NodeModule) {
+  return new ServiceBuilderImpl(_module);
 }

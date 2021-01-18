@@ -15,7 +15,9 @@
  */
 
 import { Options } from 'webpack';
+import TerserPlugin from 'terser-webpack-plugin';
 import { BundlingOptions } from './types';
+import { isParallelDefault } from '../parallel';
 
 export const optimization = (
   options: BundlingOptions,
@@ -24,6 +26,16 @@ export const optimization = (
 
   return {
     minimize: !isDev,
+    // Only configure when parallel is explicitly overriden from the default
+    ...(!isParallelDefault(options.parallel)
+      ? {
+          minimizer: [
+            new TerserPlugin({
+              parallel: options.parallel,
+            }),
+          ],
+        }
+      : {}),
     runtimeChunk: 'single',
     splitChunks: {
       automaticNameDelimiter: '-',
@@ -46,7 +58,7 @@ export const optimization = (
           },
           filename: isDev
             ? 'module-[name].js'
-            : 'module-[name].[chunkhash:8].js',
+            : 'static/module-[name].[chunkhash:8].js',
           priority: 10,
           minSize: 100000,
           minChunks: 1,

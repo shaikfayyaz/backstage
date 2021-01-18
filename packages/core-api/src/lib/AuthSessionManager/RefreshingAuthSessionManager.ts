@@ -22,6 +22,7 @@ import {
 } from './types';
 import { AuthConnector } from '../AuthConnector';
 import { SessionScopeHelper, hasScopes } from './common';
+import { SessionStateTracker } from './SessionStateTracker';
 
 type Options<T> = {
   /** The connector used for acting on the auth session */
@@ -43,6 +44,7 @@ export class RefreshingAuthSessionManager<T> implements SessionManager<T> {
   private readonly helper: SessionScopeHelper<T>;
   private readonly sessionScopesFunc: SessionScopesFunc<T>;
   private readonly sessionShouldRefreshFunc: SessionShouldRefreshFunc<T>;
+  private readonly stateTracker = new SessionStateTracker();
 
   private refreshPromise?: Promise<T>;
   private currentSession: T | undefined;
@@ -88,7 +90,12 @@ export class RefreshingAuthSessionManager<T> implements SessionManager<T> {
 
     // The user may still have a valid refresh token in their cookies. Attempt to
     // initiate a fresh session through the backend using that refresh token.
-    if (!this.currentSession) {
+    //
+    // We skip this check if an instant login popup is requested, as we need to
+    // stay in a synchronous call stack from the user interaction. The downside
+    // is that that the user will sometimes be requested to log in even if they
+    // already had an existing session.
+    if (!this.currentSession && !options.instantPopup) {
       try {
         const newSession = await this.collapsedSessionRefresh();
         this.currentSession = newSession;
@@ -109,16 +116,18 @@ export class RefreshingAuthSessionManager<T> implements SessionManager<T> {
       ...options,
       scopes: this.helper.getExtendedScope(this.currentSession, options.scopes),
     });
+    this.stateTracker.setIsSignedIn(true);
     return this.currentSession;
   }
 
   async removeSession() {
     this.currentSession = undefined;
     await this.connector.removeSession();
+    this.stateTracker.setIsSignedIn(false);
   }
 
-  async getCurrentSession() {
-    return this.currentSession;
+  sessionState$() {
+    return this.stateTracker.sessionState$();
   }
 
   private async collapsedSessionRefresh(): Promise<T> {
@@ -129,7 +138,9 @@ export class RefreshingAuthSessionManager<T> implements SessionManager<T> {
     this.refreshPromise = this.connector.refreshSession();
 
     try {
-      return await this.refreshPromise;
+      const session = await this.refreshPromise;
+      this.stateTracker.setIsSignedIn(true);
+      return session;
     } finally {
       delete this.refreshPromise;
     }

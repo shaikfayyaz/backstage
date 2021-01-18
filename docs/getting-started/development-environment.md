@@ -1,4 +1,9 @@
-# Development Environment
+---
+id: development-environment
+title: Development Environment
+# prettier-ignore
+description: Documentation on how to get set up for doing development on the Backstage repository
+---
 
 This section describes how to get set up for doing development on the Backstage
 repository.
@@ -50,7 +55,8 @@ system resources and slow things down.
 
 ## Package Scripts
 
-There are many commands to be found in the root [package.json](package.json),
+There are many commands to be found in the root
+[package.json](https://github.com/backstage/backstage/blob/master/package.json),
 here are some useful ones:
 
 ```python
@@ -61,6 +67,7 @@ yarn storybook # Start local storybook, useful for working on components in @bac
 yarn workspace @backstage/plugin-welcome start # Serve welcome plugin only, also supports --check
 
 yarn tsc # Run typecheck, use --watch for watch mode
+yarn tsc:full # Run full type checking, for example without skipLibCheck, use in CI
 
 yarn build # Build published versions of packages, depends on tsc
 
@@ -73,26 +80,25 @@ yarn test:all # test all packages
 
 yarn clean # Remove all output folders and @backstage/cli cache
 
-yarn bundle # Build a production bundle of the example app
-
 yarn diff # Make sure all plugins are up to date with the latest plugin template
 
 yarn create-plugin # Create a new plugin
 ```
 
-### (Optional)Try on Docker
+> See
+> [package.json](https://github.com/backstage/backstage/blob/master/package.json)
+> for other yarn commands/options.
 
-Run the following commands if you have Docker environment
+## Local configuration
 
-```bash
-$ yarn docker-build
-$ docker run --rm -it -p 80:80 spotify/backstage
-```
+Backstage allows you to specify the configuration used while running the
+application on your computer. Local configuration is read from
+`app-config.local.yaml`. This file is ignored by Git, which means that you can
+safely use it to reference secrets like GitHub tokens without worrying about
+these secrets, inadvertently ending up in the Git repository. You do not need to
+copy everything from the default config to the local config.
+`app-config.local.yaml` will be merged with `app-config.yaml` and overwrite the
+default app configs.
 
-Then open http://localhost/ on your browser.
-
-> See [package.json](/package.json) for other yarn commands/options.
-
-[Next Step - Create a Backstage plugin](create-a-plugin.md)
-
-[Back to Docs](README.md)
+You can learn more about the local configuration in
+[Static Configuration in Backstage](../conf/) section.

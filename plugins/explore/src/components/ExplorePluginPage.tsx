@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-import React, { FC } from 'react';
+import React from 'react';
 import { makeStyles, Typography } from '@material-ui/core';
 import {
   Content,
   ContentHeader,
   Header,
   Page,
-  pageTheme,
   SupportButton,
 } from '@backstage/core';
 import ExploreCard, { CardData } from './ExploreCard';
@@ -37,6 +36,14 @@ const useStyles = makeStyles<BackstageTheme>(theme => ({
 }));
 
 const toolsCards = [
+  {
+    title: 'New Relic',
+    description:
+      'Observability platform built to help engineers create and monitor their software',
+    url: '/newrelic',
+    image: 'https://i.imgur.com/L37ikrX.jpg',
+    tags: ['newrelic', 'performance', 'monitoring', 'errors', 'alerting'],
+  },
   {
     title: 'CircleCI',
     description:
@@ -72,6 +79,13 @@ const toolsCards = [
     tags: ['standards', 'landscape'],
   },
   {
+    title: 'Cost Insights',
+    description: 'Insights into cloud costs for your organization.',
+    url: '/cost-insights',
+    image: 'https://cloud.google.com/images/press/logo-cloud.png',
+    tags: ['cloud', 'finops'],
+  },
+  {
     title: 'GraphiQL',
     description:
       'Integrates GraphiQL as a tool to browse GraphiQL endpoints inside Backstage.',
@@ -88,12 +102,22 @@ const toolsCards = [
     image: 'https://miro.medium.com/max/801/1*R28u8gj-hVdDFISoYqPhrQ.png',
     tags: ['gitops', 'dev'],
   },
+  {
+    title: 'Rollbar',
+    description:
+      'Error monitoring and crash reporting for agile development and continuous delivery',
+    url: '/rollbar',
+    image:
+      'https://images.ctfassets.net/cj4mgtttlyx7/4DfiWj9CbuHBi10uWK7JHn/5e94a6c5dbd5d50bdcd8d9e78f88689b/rollbar-seo.png',
+    tags: ['rollbar', 'monitoring', 'errors'],
+  },
 ];
 
-const ExplorePluginPage: FC<{}> = () => {
+export const ExplorePluginPage = () => {
   const classes = useStyles();
+
   return (
-    <Page theme={pageTheme.home}>
+    <Page themeId="home">
       <Header
         title="Explore"
         subtitle="Tools and services available in Backstage"
@@ -113,5 +137,3 @@ const ExplorePluginPage: FC<{}> = () => {
     </Page>
   );
 };
-
-export default ExplorePluginPage;

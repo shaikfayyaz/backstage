@@ -24,30 +24,45 @@ import { useNavigate } from 'react-router';
 interface IErrorPageProps {
   status: string;
   statusMessage: string;
+  additionalInfo?: string;
 }
 
 const useStyles = makeStyles<BackstageTheme>(theme => ({
   container: {
     padding: theme.spacing(8),
+    [theme.breakpoints.down('xs')]: {
+      padding: theme.spacing(2),
+    },
   },
   title: {
     paddingBottom: theme.spacing(5),
+    [theme.breakpoints.down('xs')]: {
+      paddingBottom: theme.spacing(4),
+      fontSize: 32,
+    },
   },
   subtitle: {
     color: theme.palette.textSubtle,
   },
 }));
 
-export const ErrorPage = ({ status, statusMessage }: IErrorPageProps) => {
+export const ErrorPage = ({
+  status,
+  statusMessage,
+  additionalInfo,
+}: IErrorPageProps) => {
   const classes = useStyles();
   const navigate = useNavigate();
 
   return (
-    <Grid container className={classes.container}>
+    <Grid container spacing={0} className={classes.container}>
       <MicDrop />
-      <Grid item xs={12} sm={4}>
+      <Grid item xs={12} sm={8} md={4}>
         <Typography variant="body1" className={classes.subtitle}>
           ERROR {status}: {statusMessage}
+        </Typography>
+        <Typography variant="body1" className={classes.subtitle}>
+          {additionalInfo}
         </Typography>
         <Typography variant="h2" className={classes.title}>
           Looks like someone dropped the mic!
@@ -57,7 +72,12 @@ export const ErrorPage = ({ status, statusMessage }: IErrorPageProps) => {
             Go back
           </Link>
           ... or if you think this is a bug, please file an{' '}
-          <Link href="https://github.com/spotify/backstage/issues">issue.</Link>
+          <Link
+            href="https://github.com/backstage/backstage/issues"
+            rel="noopener noreferrer"
+          >
+            issue.
+          </Link>
         </Typography>
       </Grid>
     </Grid>

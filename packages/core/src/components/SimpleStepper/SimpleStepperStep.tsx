@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import React, { FC } from 'react';
+import React, { PropsWithChildren } from 'react';
 import {
   Step as MuiStep,
   StepContent,
@@ -21,9 +21,9 @@ import {
   Typography,
   makeStyles,
 } from '@material-ui/core';
-import SimpleStepperFooter from './SimpleStepperFooter';
+import { SimpleStepperFooter } from './SimpleStepperFooter';
 
-const useStyles = makeStyles((theme) => ({
+const useStyles = makeStyles(theme => ({
   end: {
     padding: theme.spacing(3),
   },
@@ -53,13 +53,13 @@ export type StepProps = {
   actions?: StepActions;
 };
 
-const Step: FC<StepProps> = ({
+export const SimpleStepperStep = ({
   title,
   children,
   end,
   actions,
   ...muiProps
-}) => {
+}: PropsWithChildren<StepProps>) => {
   const classes = useStyles();
 
   // The end step is not a part of the stepper
@@ -82,5 +82,3 @@ const Step: FC<StepProps> = ({
     </MuiStep>
   );
 };
-
-export default Step;

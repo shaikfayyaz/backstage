@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-import React, { FC, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Header,
   Page,
-  pageTheme,
   Content,
   ContentHeader,
   HeaderLabel,
@@ -35,6 +34,7 @@ import {
   StatusPending,
   StatusAborted,
   useApi,
+  githubAuthApiRef,
 } from '@backstage/core';
 import { TextField, List, ListItem, Link } from '@material-ui/core';
 
@@ -79,7 +79,7 @@ export const transformRunStatus = (x: Status[]) => {
   });
 };
 
-const ProfileCatalog: FC<{}> = () => {
+const ProfileCatalog = () => {
   // TODO: get data from REST API
   const [clusterTemplates] = React.useState([
     {
@@ -111,17 +111,12 @@ const ProfileCatalog: FC<{}> = () => {
     },
   ]);
 
-  const [loginInfo] = useLocalStorage('githubLoginDetails', {
-    name: 'Guest',
-    username: '',
-    token: '',
-  });
   const [templateRepo] = useLocalStorage<string>('gitops-template-repo');
   const [gitopsProfiles] = useLocalStorage<string[]>('gitops-profiles');
 
   const [showProgress, setShowProgress] = useState(false);
   const [pollingLog, setPollingLog] = useState(false);
-  const [gitHubOrg, setGitHubOrg] = useState(loginInfo.username);
+  const [gitHubOrg, setGitHubOrg] = useState(String);
   const [gitHubRepo, setGitHubRepo] = useState('new-cluster');
   const [awsAccessKeyId, setAwsAccessKeyId] = useState(String);
   const [awsSecretAccessKey, setAwsSecretAccessKey] = useState(String);
@@ -129,28 +124,52 @@ const ProfileCatalog: FC<{}> = () => {
   const [runLink, setRunLink] = useState<string>('');
 
   const api = useApi(gitOpsApiRef);
+  const githubAuth = useApi(githubAuthApiRef);
+  const [githubAccessToken, setGithubAccessToken] = useState(String);
+  const [githubUsername, setGithubUsername] = useState(String);
 
   useEffect(() => {
-    if (pollingLog) {
-      const interval = setInterval(async () => {
-        const resp = await api.fetchLog({
-          gitHubToken: loginInfo.token,
-          gitHubUser: loginInfo.username,
-          targetOrg: gitHubOrg,
-          targetRepo: gitHubRepo,
-        });
+    const fetchGithubUserInfo = async () => {
+      const accessToken = await githubAuth.getAccessToken(['repo', 'user']);
+      const userInfo = await api.fetchUserInfo({ accessToken });
+      setGithubAccessToken(accessToken);
+      setGithubUsername(userInfo.login);
+      setGitHubOrg(userInfo.login);
+    };
 
-        setRunStatus(resp.result);
-        setRunLink(resp.link);
-        if (resp.status === 'completed') {
-          setPollingLog(false);
-          setShowProgress(false);
-        }
-      }, 10000);
-      return () => clearInterval(interval);
+    if (!githubAccessToken || !githubUsername) {
+      fetchGithubUserInfo();
+    } else {
+      if (pollingLog) {
+        const interval = setInterval(async () => {
+          const resp = await api.fetchLog({
+            gitHubToken: githubAccessToken,
+            gitHubUser: githubUsername,
+            targetOrg: gitHubOrg,
+            targetRepo: gitHubRepo,
+          });
+
+          setRunStatus(resp.result);
+          setRunLink(resp.link);
+          if (resp.status === 'completed') {
+            setPollingLog(false);
+            setShowProgress(false);
+          }
+        }, 10000);
+        return () => clearInterval(interval);
+      }
     }
+
     return () => {};
-  }, [pollingLog, api, gitHubOrg, gitHubRepo, loginInfo]);
+  }, [
+    pollingLog,
+    api,
+    gitHubOrg,
+    gitHubRepo,
+    githubAuth,
+    githubAccessToken,
+    githubUsername,
+  ]);
 
   const showFailureMessage = (msg: string) => {
     setRunStatus(
@@ -181,9 +200,9 @@ const ProfileCatalog: FC<{}> = () => {
     setRunStatus([]);
 
     const cloneResponse = await api.cloneClusterFromTemplate({
-      templateRepository: templateRepo,
-      gitHubToken: loginInfo.token,
-      gitHubUser: loginInfo.username,
+      templateRepository: templateRepo!,
+      gitHubToken: githubAccessToken,
+      gitHubUser: githubUsername,
       targetOrg: gitHubOrg,
       targetRepo: gitHubRepo,
       secrets: {
@@ -200,11 +219,11 @@ const ProfileCatalog: FC<{}> = () => {
     }
 
     const applyProfileResp = await api.applyProfiles({
-      gitHubToken: loginInfo.token,
-      gitHubUser: loginInfo.username,
+      gitHubToken: githubAccessToken,
+      gitHubUser: githubUsername,
       targetOrg: gitHubOrg,
       targetRepo: gitHubRepo,
-      profiles: gitopsProfiles,
+      profiles: gitopsProfiles!,
     });
 
     if (applyProfileResp.error === undefined) {
@@ -215,8 +234,8 @@ const ProfileCatalog: FC<{}> = () => {
     }
 
     const clusterStateResp = await api.changeClusterState({
-      gitHubToken: loginInfo.token,
-      gitHubUser: loginInfo.username,
+      gitHubToken: githubAccessToken,
+      gitHubUser: githubUsername,
       targetOrg: gitHubOrg,
       targetRepo: gitHubRepo,
       clusterState: 'present',
@@ -239,12 +258,12 @@ const ProfileCatalog: FC<{}> = () => {
   ];
 
   return (
-    <Page theme={pageTheme.tool}>
+    <Page themeId="tool">
       <Header
         title="Create GitOps-managed Cluster"
         subtitle="Kubernetes cluster with ready-to-use profiles"
       >
-        <HeaderLabel label="Welcome" value={loginInfo.name} />
+        <HeaderLabel label="Welcome" value={githubUsername} />
       </Header>
       <Content>
         <ContentHeader title="Create Cluster">

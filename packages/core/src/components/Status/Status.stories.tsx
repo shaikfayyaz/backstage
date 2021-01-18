@@ -23,11 +23,11 @@ import {
   StatusRunning,
   StatusWarning,
 } from './Status';
-import Table from '../Table';
+import { Table } from '../Table';
 import { InfoCard } from '../../layout/InfoCard';
 
 export default {
-  title: 'Status',
+  title: 'Feedback/Status',
   component: StatusOK,
 };
 

@@ -14,30 +14,44 @@
  * limitations under the License.
  */
 
-import type { RouteRefConfig, RouteRefOverrideConfig } from './types';
+import { RouteRefConfig, RouteRef } from './types';
 
-export class MutableRouteRef {
-  private effectiveConfig: RouteRefConfig = this.config;
-
-  constructor(private readonly config: RouteRefConfig) {}
-
-  override(overrideConfig: RouteRefOverrideConfig) {
-    this.effectiveConfig = { ...this.config, ...overrideConfig };
-  }
+export class AbsoluteRouteRef<Params extends { [param in string]: string }> {
+  constructor(private readonly config: RouteRefConfig<Params>) {}
 
   get icon() {
-    return this.effectiveConfig.icon;
+    return this.config.icon;
   }
 
+  // TODO(Rugvip): Remove this, routes are looked up via the registry instead
   get path() {
-    return this.effectiveConfig.path;
+    return this.config.path ?? '';
   }
 
   get title() {
-    return this.effectiveConfig.title;
+    return this.config.title;
+  }
+
+  toString() {
+    return `routeRef{title=${this.title}}`;
   }
 }
 
-export function createRouteRef(config: RouteRefConfig): MutableRouteRef {
-  return new MutableRouteRef(config);
+export function createRouteRef<
+  ParamKeys extends string,
+  Params extends { [param in string]: string } = { [name in ParamKeys]: string }
+>(config: RouteRefConfig<Params>): RouteRef<Params> {
+  return new AbsoluteRouteRef<Params>(config);
+}
+
+export class ExternalRouteRef {
+  private constructor() {}
+
+  toString() {
+    return `externalRouteRef{}`;
+  }
+}
+
+export function createExternalRouteRef(): ExternalRouteRef {
+  return new ((ExternalRouteRef as unknown) as { new (): ExternalRouteRef })();
 }

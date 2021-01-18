@@ -14,22 +14,28 @@
  * limitations under the License.
  */
 
+import { IconComponent } from '@backstage/core-api';
+import { BackstageTheme } from '@backstage/theme';
 import {
+  Badge,
   makeStyles,
   styled,
   TextField,
-  Theme,
   Typography,
-  Badge,
 } from '@material-ui/core';
-import { IconComponent } from '@backstage/core-api';
 import SearchIcon from '@material-ui/icons/Search';
 import clsx from 'clsx';
-import React, { FC, useContext, useState, KeyboardEventHandler } from 'react';
+import React, {
+  forwardRef,
+  KeyboardEventHandler,
+  ReactNode,
+  useContext,
+  useState,
+} from 'react';
 import { NavLink } from 'react-router-dom';
 import { sidebarConfig, SidebarContext } from './config';
 
-const useStyles = makeStyles<Theme>(theme => {
+const useStyles = makeStyles<BackstageTheme>(theme => {
   const {
     selectedIndicatorWidth,
     drawerWidthClosed,
@@ -40,12 +46,21 @@ const useStyles = makeStyles<Theme>(theme => {
 
   return {
     root: {
-      color: '#b5b5b5',
+      color: theme.palette.navigation.color,
       display: 'flex',
       flexFlow: 'row nowrap',
       alignItems: 'center',
       height: 48,
       cursor: 'pointer',
+    },
+    buttonItem: {
+      background: 'none',
+      border: 'none',
+      width: 'auto',
+      margin: 0,
+      padding: 0,
+      textAlign: 'inherit',
+      font: 'inherit',
     },
     closed: {
       width: drawerWidthClosed,
@@ -95,8 +110,8 @@ const useStyles = makeStyles<Theme>(theme => {
     },
     selected: {
       '&$root': {
-        borderLeft: `solid ${selectedIndicatorWidth}px #9BF0E1`,
-        color: '#ffffff',
+        borderLeft: `solid ${selectedIndicatorWidth}px ${theme.palette.navigation.indicator}`,
+        color: theme.palette.navigation.selectedColor,
       },
       '&$closed': {
         width: drawerWidthClosed - selectedIndicatorWidth,
@@ -108,25 +123,38 @@ const useStyles = makeStyles<Theme>(theme => {
   };
 });
 
-type SidebarItemProps = {
+type SidebarItemBaseProps = {
   icon: IconComponent;
   text?: string;
-  to?: string;
-  disableSelected?: boolean;
   hasNotifications?: boolean;
-  onClick?: () => void;
+  children?: ReactNode;
 };
 
-export const SidebarItem: FC<SidebarItemProps> = ({
-  icon: Icon,
-  text,
-  to = '#',
-  // TODO: isActive is not in v6
-  // disableSelected = false,
-  hasNotifications = false,
-  onClick,
-  children,
-}) => {
+type SidebarItemButtonProps = SidebarItemBaseProps & {
+  onClick: (ev: React.MouseEvent) => void;
+};
+
+type SidebarItemLinkProps = SidebarItemBaseProps & {
+  to: string;
+  onClick?: (ev: React.MouseEvent) => void;
+};
+
+type SidebarItemProps = SidebarItemButtonProps | SidebarItemLinkProps;
+
+function isButtonItem(
+  props: SidebarItemProps,
+): props is SidebarItemButtonProps {
+  return (props as SidebarItemLinkProps).to === undefined;
+}
+
+export const SidebarItem = forwardRef<any, SidebarItemProps>((props, ref) => {
+  const {
+    icon: Icon,
+    text,
+    hasNotifications = false,
+    onClick,
+    children,
+  } = props;
   const classes = useStyles();
   // XXX (@koroeskohr): unsure this is optimal. But I just really didn't want to have the item component
   // depend on the current location, and at least have it being optionally forced to selected.
@@ -144,27 +172,10 @@ export const SidebarItem: FC<SidebarItemProps> = ({
     </Badge>
   );
 
-  if (!isOpen) {
-    return (
-      <NavLink
-        className={clsx(classes.root, classes.closed)}
-        activeClassName={classes.selected}
-        end
-        to={to}
-        onClick={onClick}
-      >
-        {itemIcon}
-      </NavLink>
-    );
-  }
-  return (
-    <NavLink
-      className={clsx(classes.root, classes.open)}
-      activeClassName={classes.selected}
-      end
-      to={to}
-      onClick={onClick}
-    >
+  const closedContent = itemIcon;
+
+  const openContent = (
+    <>
       <div data-testid="login-button" className={classes.iconContainer}>
         {itemIcon}
       </div>
@@ -174,21 +185,58 @@ export const SidebarItem: FC<SidebarItemProps> = ({
         </Typography>
       )}
       <div className={classes.secondaryAction}>{children}</div>
+    </>
+  );
+
+  const content = isOpen ? openContent : closedContent;
+
+  const childProps = {
+    onClick,
+    className: clsx(
+      classes.root,
+      isOpen ? classes.open : classes.closed,
+      isButtonItem(props) && classes.buttonItem,
+    ),
+  };
+
+  if (isButtonItem(props)) {
+    return (
+      <button {...childProps} ref={ref}>
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <NavLink
+      {...childProps}
+      activeClassName={classes.selected}
+      to={props.to}
+      end
+      ref={ref}
+    >
+      {content}
     </NavLink>
   );
-};
+});
 
 type SidebarSearchFieldProps = {
   onSearch: (input: string) => void;
+  to?: string;
 };
 
-export const SidebarSearchField: FC<SidebarSearchFieldProps> = props => {
+export const SidebarSearchField = (props: SidebarSearchFieldProps) => {
   const [input, setInput] = useState('');
   const classes = useStyles();
 
+  const search = () => {
+    props.onSearch(input);
+    setInput('');
+  };
+
   const handleEnter: KeyboardEventHandler = ev => {
     if (ev.key === 'Enter') {
-      props.onSearch(input);
+      search();
     }
   };
 
@@ -196,11 +244,25 @@ export const SidebarSearchField: FC<SidebarSearchFieldProps> = props => {
     setInput(ev.target.value);
   };
 
+  const handleInputClick = (ev: React.MouseEvent<HTMLInputElement>) => {
+    // Clicking into the search fields shouldn't navigate to the search page
+    ev.preventDefault();
+    ev.stopPropagation();
+  };
+
+  const handleItemClick = (ev: React.MouseEvent) => {
+    // Clicking on the search icon while should execute a query with the current field content
+    search();
+    ev.preventDefault();
+  };
+
   return (
     <div className={classes.searchRoot}>
-      <SidebarItem icon={SearchIcon} disableSelected>
+      <SidebarItem icon={SearchIcon} to={props.to} onClick={handleItemClick}>
         <TextField
           placeholder="Search"
+          value={input}
+          onClick={handleInputClick}
           onChange={handleInput}
           onKeyDown={handleEnter}
           className={classes.searchContainer}
@@ -227,5 +289,5 @@ export const SidebarDivider = styled('hr')({
   width: '100%',
   background: '#383838',
   border: 'none',
-  margin: 0,
+  margin: '12px 0px',
 });

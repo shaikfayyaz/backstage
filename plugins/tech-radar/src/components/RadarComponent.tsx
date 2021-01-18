@@ -14,50 +14,62 @@
  * limitations under the License.
  */
 
-import React, { useEffect, useState, FC } from 'react';
+import React, { useEffect } from 'react';
 import { Progress, useApi, errorApiRef, ErrorApi } from '@backstage/core';
+import { useAsync } from 'react-use';
 import Radar from '../components/Radar';
 import { TechRadarComponentProps, TechRadarLoaderResponse } from '../api';
 import getSampleData from '../sampleData';
+import { Entry } from '../utils/types';
 
 const useTechRadarLoader = (props: TechRadarComponentProps) => {
   const errorApi = useApi<ErrorApi>(errorApiRef);
-  const [state, setState] = useState<{
-    loading: boolean;
-    error?: Error;
-    data?: TechRadarLoaderResponse;
-  }>({
-    loading: true,
-    error: undefined,
-    data: undefined,
-  });
 
   const { getData } = props;
 
-  useEffect(() => {
-    if (!getData) {
-      return;
+  const state = useAsync(async () => {
+    if (getData) {
+      const response: TechRadarLoaderResponse = await getData();
+      return response;
     }
-
-    getData()
-      .then((payload: TechRadarLoaderResponse) => {
-        setState({ loading: false, error: undefined, data: payload });
-      })
-      .catch((err: Error) => {
-        errorApi.post(err);
-        setState({
-          loading: false,
-          error: err,
-          data: undefined,
-        });
-      });
+    return undefined;
   }, [getData, errorApi]);
+
+  useEffect(() => {
+    const { error } = state;
+    if (error) {
+      errorApi.post(error);
+    }
+  }, [errorApi, state]);
 
   return state;
 };
 
-const RadarComponent: FC<TechRadarComponentProps> = props => {
-  const { loading, error, data } = useTechRadarLoader(props);
+const RadarComponent = (props: TechRadarComponentProps): JSX.Element => {
+  const { loading, error, value: data } = useTechRadarLoader(props);
+
+  const mapToEntries = (
+    loaderResponse: TechRadarLoaderResponse | undefined,
+  ): Array<Entry> => {
+    return loaderResponse!.entries.map(entry => {
+      return {
+        id: entry.key,
+        quadrant: loaderResponse!.quadrants.find(q => q.id === entry.quadrant)!,
+        title: entry.title,
+        ring: loaderResponse!.rings.find(
+          r => r.id === entry.timeline[0].ringId,
+        )!,
+        history: entry.timeline.map(e => {
+          return {
+            date: e.date,
+            ring: loaderResponse!.rings.find(a => a.id === e.ringId)!,
+            description: e.description,
+            moved: e.moved,
+          };
+        }),
+      };
+    });
+  };
 
   return (
     <>
@@ -67,7 +79,7 @@ const RadarComponent: FC<TechRadarComponentProps> = props => {
           {...props}
           rings={data!.rings}
           quadrants={data!.quadrants}
-          entries={data!.entries}
+          entries={mapToEntries(data)}
         />
       )}
     </>

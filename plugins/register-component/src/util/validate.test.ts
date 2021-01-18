@@ -30,26 +30,14 @@ describe('ComponentIdValidators', () => {
       expect(ComponentIdValidators.httpsValidator(arg)).toBe(expected);
     });
   });
-  describe('masterValidator', () => {
-    const errorMessage = 'Must reference a file on the master branch.';
-    test.each([
-      [true, '/blob/master/'],
-      [true, 'http://example.com/blob/master/'],
-      [errorMessage, 'blob/master/'],
-      [errorMessage, '/blob/master'],
-      [errorMessage, '/master/'],
-      [errorMessage, ''],
-      [errorMessage, undefined],
-    ])('should return %p for %s', (expected: string | boolean, arg: any) => {
-      expect(ComponentIdValidators.masterValidator(arg)).toBe(expected);
-    });
-  });
   describe('yamlValidator', () => {
-    const errorMessage = "Must end with '.yaml'.";
+    const errorMessage = "Must contain '.yaml'.";
     test.each([
       [true, '.yaml'],
       [true, 'http://example.com/blob/master/service.yaml'],
       [true, 'https://example.yaml'],
+      [true, 'https://example.com?path=abc.yaml&c=1'],
+      [errorMessage, 'https://example.com?path=abc_yaml&c=1'],
       [errorMessage, '.yml'],
       [errorMessage, 'http://example.com/blob/master/service'],
       [errorMessage, undefined],

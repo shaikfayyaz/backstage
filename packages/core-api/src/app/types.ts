@@ -16,20 +16,59 @@
 
 import { ComponentType } from 'react';
 import { IconComponent, SystemIconKey, SystemIcons } from '../icons';
-import { BackstagePlugin } from '../plugin';
-import { ApiHolder } from '../apis';
-import { AppTheme, ConfigApi } from '../apis/definitions';
+import { BackstagePlugin, AnyExternalRoutes } from '../plugin/types';
+import { RouteRef } from '../routing';
+import { AnyApiFactory } from '../apis';
+import { AppTheme, ProfileInfo } from '../apis/definitions';
 import { AppConfig } from '@backstage/config';
 
 export type BootErrorPageProps = {
   step: 'load-config';
   error: Error;
 };
+
+export type SignInResult = {
+  /**
+   * User ID that will be returned by the IdentityApi
+   */
+  userId: string;
+
+  profile: ProfileInfo;
+
+  /**
+   * Function used to retrieve an ID token for the signed in user.
+   */
+  getIdToken?: () => Promise<string>;
+
+  /**
+   * Sign out handler that will be called if the user requests to sign out.
+   */
+  signOut?: () => Promise<void>;
+};
+
+export type SignInPageProps = {
+  /**
+   * Set the sign-in result for the app. This should only be called once.
+   */
+  onResult(result: SignInResult): void;
+};
+
 export type AppComponents = {
   NotFoundErrorPage: ComponentType<{}>;
   BootErrorPage: ComponentType<BootErrorPageProps>;
   Progress: ComponentType<{}>;
   Router: ComponentType<{}>;
+
+  /**
+   * An optional sign-in page that will be rendered instead of the AppRouter at startup.
+   *
+   * If a sign-in page is set, it will always be shown before the app, and it is up
+   * to the sign-in page to handle e.g. saving of login methods for subsequent visits.
+   *
+   * The sign-in page will be displayed until it has passed up a result to the parent,
+   * and which point the AppRouter and all of its children will be rendered instead.
+   */
+  SignInPage?: ComponentType<SignInPageProps>;
 };
 
 /**
@@ -40,16 +79,17 @@ export type AppComponents = {
  */
 export type AppConfigLoader = () => Promise<AppConfig[]>;
 
-// TODO(Rugvip): Temporary workaround for accessing config when instantiating APIs, we might want to do this differently
-export type Apis = ApiHolder | ((config: ConfigApi) => ApiHolder);
+export type AppRouteBinder = <T extends AnyExternalRoutes>(
+  externalRoutes: T,
+  targetRoutes: { [key in keyof T]: RouteRef<any> },
+) => void;
 
 export type AppOptions = {
   /**
-   * A holder of all APIs available in the app.
-   *
-   * Use for example ApiRegistry or ApiTestRegistry.
+   * A collection of ApiFactories to register in the application to either
+   * add add new ones, or override factories provided by default or by plugins.
    */
-  apis?: Apis;
+  apis?: Iterable<AnyApiFactory>;
 
   /**
    * Supply icons to override the default ones.
@@ -59,7 +99,7 @@ export type AppOptions = {
   /**
    * A list of all plugins to include in the app.
    */
-  plugins?: BackstagePlugin[];
+  plugins?: BackstagePlugin<any, any>[];
 
   /**
    * Supply components to the app to override the default ones.
@@ -78,11 +118,13 @@ export type AppOptions = {
    *   title: 'Light Theme',
    *   variant: 'light',
    *   theme: lightTheme,
+   *   icon: <LightIcon />,
    * }, {
    *   id: 'dark',
    *   title: 'Dark Theme',
    *   variant: 'dark',
    *   theme: darkTheme,
+   *   icon: <DarkIcon />,
    * }]
    * ```
    */
@@ -98,18 +140,33 @@ export type AppOptions = {
    *  that was packaged by the backstage-cli and default docker container boot script.
    */
   configLoader?: AppConfigLoader;
+
+  /**
+   * A function that is used to register associations between cross-plugin route
+   * references, enabling plugins to navigate between each other.
+   *
+   * The `bind` function that is passed in should be used to bind all external
+   * routes of all used plugins.
+   *
+   * ```ts
+   * bindRoutes({ bind }) {
+   *   bind(docsPlugin.externalRoutes, {
+   *     homePage: managePlugin.routes.managePage,
+   *   })
+   *   bind(homePagePlugin.externalRoutes, {
+   *     settingsPage: settingsPlugin.routes.settingsPage,
+   *   })
+   * }
+   * ```
+   */
+  bindRoutes?(context: { bind: AppRouteBinder }): void;
 };
 
 export type BackstageApp = {
   /**
-   * Get the holder for all APIs available in the app.
-   */
-  getApis(): ApiHolder;
-
-  /**
    * Returns all plugins registered for the app.
    */
-  getPlugins(): BackstagePlugin[];
+  getPlugins(): BackstagePlugin<any, any>[];
 
   /**
    * Get a common icon for this app.
@@ -117,14 +174,19 @@ export type BackstageApp = {
   getSystemIcon(key: SystemIconKey): IconComponent;
 
   /**
-   * Creates a root component for this app, including the App chrome
-   * and routes to all plugins.
-   */
-  getRootComponent(): ComponentType<{}>;
-
-  /**
-   * Provider component that should wrap the App's RootComponent and
-   * any other components that need to be within the app context.
+   * Provider component that should wrap the Router created with getRouter()
+   * and any other components that need to be within the app context.
    */
   getProvider(): ComponentType<{}>;
+
+  /**
+   * Router component that should wrap the App Routes create with getRoutes()
+   * and any other components that should only be available while signed in.
+   */
+  getRouter(): ComponentType<{}>;
+
+  /**
+   * Routes component that contains all routes for plugin pages in the app.
+   */
+  getRoutes(): JSX.Element[];
 };

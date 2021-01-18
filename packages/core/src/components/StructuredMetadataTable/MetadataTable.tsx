@@ -25,6 +25,7 @@ import {
   WithStyles,
   Theme,
 } from '@material-ui/core';
+
 const tableTitleCellStyles = (theme: Theme) =>
   createStyles({
     root: {
@@ -70,13 +71,7 @@ export const MetadataTable = ({
   dense?: boolean;
   children: React.ReactNode;
 }) => (
-  <Table>
-    {!dense && (
-      <colgroup>
-        <col style={{ width: 'auto' }} />
-        <col style={{ width: '100%' }} />
-      </colgroup>
-    )}
+  <Table size={dense ? 'small' : 'medium'}>
     <TableBody>{children}</TableBody>
   </Table>
 );

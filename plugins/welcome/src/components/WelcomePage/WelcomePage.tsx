@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import React, { FC } from 'react';
+import React from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Typography,
@@ -30,7 +30,6 @@ import {
   Header,
   HomepageTimer,
   Page,
-  pageTheme,
   ContentHeader,
   SupportButton,
   WarningPanel,
@@ -38,12 +37,13 @@ import {
   configApiRef,
 } from '@backstage/core';
 
-const WelcomePage: FC<{}> = () => {
-  const appTitle = useApi(configApiRef).getString('app.title') ?? 'Backstage';
+const WelcomePage = () => {
+  const appTitle =
+    useApi(configApiRef).getOptionalString('app.title') ?? 'Backstage';
   const profile = { givenName: '' };
 
   return (
-    <Page theme={pageTheme.home}>
+    <Page themeId="home">
       <Header
         title={`Welcome ${profile.givenName || `to ${appTitle}`}`}
         subtitle="Let's start building a better developer experience"
@@ -68,7 +68,10 @@ const WelcomePage: FC<{}> = () => {
                   the project and we have already begun work on various aspects
                   of these phases. The best way to keep track of the progress is
                   through the&nbsp;
-                  <Link href="https://github.com/spotify/backstage/milestones">
+                  <Link
+                    href="https://github.com/backstage/backstage/milestones"
+                    rel="noopener noreferrer"
+                  >
                     Milestones
                   </Link>
                   .
@@ -112,7 +115,10 @@ const WelcomePage: FC<{}> = () => {
               </Typography>
               <Typography variant="body1" paragraph>
                 We suggest you either check out the documentation for{' '}
-                <Link href="https://github.com/spotify/backstage/blob/master/docs/getting-started/create-a-plugin.md">
+                <Link
+                  href="https://github.com/backstage/backstage/blob/master/docs/plugins/create-a-plugin.md"
+                  rel="noopener noreferrer"
+                >
                   creating a plugin
                 </Link>{' '}
                 or have a look in the code for the{' '}
@@ -120,7 +126,10 @@ const WelcomePage: FC<{}> = () => {
                   existing plugins
                 </Link>{' '}
                 in the directory{' '}
-                <Link href="https://github.com/spotify/backstage/tree/master/plugins">
+                <Link
+                  href="https://github.com/backstage/backstage/tree/master/plugins"
+                  rel="noopener noreferrer"
+                >
                   <code>plugins/</code>
                 </Link>
                 .
@@ -134,7 +143,10 @@ const WelcomePage: FC<{}> = () => {
                   <Link href="https://backstage.io">backstage.io</Link>
                 </ListItem>
                 <ListItem>
-                  <Link href="https://github.com/spotify/backstage/blob/master/docs/getting-started/create-a-plugin.md">
+                  <Link
+                    href="https://github.com/backstage/backstage/blob/master/docs/plugins/create-a-plugin.md"
+                    rel="noopener noreferrer"
+                  >
                     Create a plugin
                   </Link>
                 </ListItem>

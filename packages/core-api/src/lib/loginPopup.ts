@@ -46,11 +46,11 @@ export type LoginPopupOptions = {
 
 type AuthResult =
   | {
-      type: 'auth-result';
-      payload: any;
+      type: 'authorization_response';
+      response: unknown;
     }
   | {
-      type: 'auth-result';
+      type: 'authorization_response';
       error: {
         name: string;
         message: string;
@@ -58,12 +58,13 @@ type AuthResult =
     };
 
 /**
- * Show a popup pointing to a URL that starts an auth flow.
+ * Show a popup pointing to a URL that starts an auth flow. Implementing the receiving
+ * end of the postMessage mechanism outlined in https://tools.ietf.org/html/draft-sakimura-oauth-wmrm-00
  *
  * The redirect handler of the flow should use postMessage to communicate back
  * to the app window. The message posted to the app must match the AuthResult type.
  *
- * The returned promise resolves to the contents of the message that was posted from the auth popup.
+ * The returned promise resolves to the response of the message that was posted from the auth popup.
  */
 export function showLoginPopup(options: LoginPopupOptions): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -78,6 +79,8 @@ export function showLoginPopup(options: LoginPopupOptions): Promise<any> {
       `menubar=no,location=no,resizable=no,scrollbars=no,status=no,width=${width},height=${height},top=${top},left=${left}`,
     );
 
+    let targetOrigin = '';
+
     if (!popup || typeof popup.closed === 'undefined' || popup.closed) {
       reject(new Error('Failed to open auth popup.'));
       return;
@@ -91,7 +94,13 @@ export function showLoginPopup(options: LoginPopupOptions): Promise<any> {
         return;
       }
       const { data } = event;
-      if (data.type !== 'auth-result') {
+
+      if (data.type === 'config_info') {
+        targetOrigin = data.targetOrigin;
+        return;
+      }
+
+      if (data.type !== 'authorization_response') {
         return;
       }
       const authResult = data as AuthResult;
@@ -103,14 +112,19 @@ export function showLoginPopup(options: LoginPopupOptions): Promise<any> {
         // error.extra = authResult.error.extra;
         reject(error);
       } else {
-        resolve(authResult.payload);
+        resolve(authResult.response);
       }
       done();
     };
 
     const intervalId = setInterval(() => {
       if (popup.closed) {
-        const error = new Error('Login failed, popup was closed');
+        const errMessage = `Login failed, ${
+          targetOrigin !== window.location.origin
+            ? `Incorrect app origin, expected ${targetOrigin}`
+            : 'popup was closed'
+        }`;
+        const error = new Error(errMessage);
         error.name = 'PopupClosedError';
         reject(error);
         done();

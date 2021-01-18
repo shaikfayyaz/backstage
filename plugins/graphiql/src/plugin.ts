@@ -14,13 +14,35 @@
  * limitations under the License.
  */
 
-import { createPlugin } from '@backstage/core';
-import { GraphiQLPage } from './components';
+import {
+  createPlugin,
+  createApiFactory,
+  createRoutableExtension,
+} from '@backstage/core';
+import { graphQlBrowseApiRef, GraphQLEndpoints } from './lib/api';
 import { graphiQLRouteRef } from './route-refs';
 
 export const plugin = createPlugin({
   id: 'graphiql',
-  register({ router }) {
-    router.addRoute(graphiQLRouteRef, GraphiQLPage);
-  },
+  apis: [
+    // GitLab is used as an example endpoint, but most will want to plug in
+    // their own instead.
+    createApiFactory(
+      graphQlBrowseApiRef,
+      GraphQLEndpoints.from([
+        GraphQLEndpoints.create({
+          id: 'gitlab',
+          title: 'GitLab',
+          url: 'https://gitlab.com/api/graphql',
+        }),
+      ]),
+    ),
+  ],
 });
+
+export const GraphiQLPage = plugin.provide(
+  createRoutableExtension({
+    component: () => import('./components').then(m => m.GraphiQLPage),
+    mountPoint: graphiQLRouteRef,
+  }),
+);

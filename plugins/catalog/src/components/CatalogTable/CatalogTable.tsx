@@ -13,16 +13,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 import { Entity } from '@backstage/catalog-model';
-import { Table, TableColumn } from '@backstage/core';
-import { Link } from '@material-ui/core';
+import { Table, TableColumn, TableProps } from '@backstage/core';
+import { Chip, Link } from '@material-ui/core';
+import Edit from '@material-ui/icons/Edit';
+import OpenInNew from '@material-ui/icons/OpenInNew';
 import { Alert } from '@material-ui/lab';
-import React, { FC } from 'react';
+import React from 'react';
 import { generatePath, Link as RouterLink } from 'react-router-dom';
-import { entityRoute } from '../../routes';
+import { findLocationForEntityMeta } from '../../data/utils';
+import { createEditLink } from '../createEditLink';
+import { useStarredEntities } from '../../hooks/useStarredEntities';
+import { entityRoute, entityRouteParams } from '../../routes';
+import {
+  favouriteEntityIcon,
+  favouriteEntityTooltip,
+} from '../FavouriteEntity/FavouriteEntity';
 
-const columns: TableColumn[] = [
+const columns: TableColumn<Entity>[] = [
   {
     title: 'Name',
     field: 'metadata.name',
@@ -31,13 +39,8 @@ const columns: TableColumn[] = [
       <Link
         component={RouterLink}
         to={generatePath(entityRoute.path, {
-          optionalNamespaceAndName: [
-            entity.metadata.namespace,
-            entity.metadata.name,
-          ]
-            .filter(Boolean)
-            .join(':'),
-          kind: entity.kind,
+          ...entityRouteParams(entity),
+          selectedTabId: 'overview',
         })}
       >
         {entity.metadata.name}
@@ -56,6 +59,27 @@ const columns: TableColumn[] = [
     title: 'Description',
     field: 'metadata.description',
   },
+  {
+    title: 'Tags',
+    field: 'metadata.tags',
+    cellStyle: {
+      padding: '0px 16px 0px 20px',
+    },
+    render: (entity: Entity) => (
+      <>
+        {entity.metadata.tags &&
+          entity.metadata.tags.map(t => (
+            <Chip
+              key={t}
+              label={t}
+              size="small"
+              variant="outlined"
+              style={{ marginBottom: '0px' }}
+            />
+          ))}
+      </>
+    ),
+  },
 ];
 
 type CatalogTableProps = {
@@ -63,16 +87,16 @@ type CatalogTableProps = {
   titlePreamble: string;
   loading: boolean;
   error?: any;
-  actions?: any;
 };
 
-export const CatalogTable: FC<CatalogTableProps> = ({
+export const CatalogTable = ({
   entities,
   loading,
   error,
   titlePreamble,
-  actions,
-}) => {
+}: CatalogTableProps) => {
+  const { isStarredEntity, toggleStarredEntity } = useStarredEntities();
+
   if (error) {
     return (
       <div>
@@ -83,15 +107,52 @@ export const CatalogTable: FC<CatalogTableProps> = ({
     );
   }
 
+  const actions: TableProps<Entity>['actions'] = [
+    (rowData: Entity) => {
+      const location = findLocationForEntityMeta(rowData.metadata);
+      return {
+        icon: () => <OpenInNew fontSize="small" />,
+        tooltip: 'View',
+        onClick: () => {
+          if (!location) return;
+          window.open(location.target, '_blank');
+        },
+      };
+    },
+    (rowData: Entity) => {
+      const location = findLocationForEntityMeta(rowData.metadata);
+      return {
+        icon: () => <Edit fontSize="small" />,
+        tooltip: 'Edit',
+        onClick: () => {
+          if (!location) return;
+          window.open(createEditLink(location), '_blank');
+        },
+      };
+    },
+    (rowData: Entity) => {
+      const isStarred = isStarredEntity(rowData);
+      return {
+        cellStyle: { paddingLeft: '1em' },
+        icon: () => favouriteEntityIcon(isStarred),
+        tooltip: favouriteEntityTooltip(isStarred),
+        onClick: () => toggleStarredEntity(rowData),
+      };
+    },
+  ];
+
   return (
-    <Table
+    <Table<Entity>
       isLoading={loading}
       columns={columns}
       options={{
-        paging: false,
+        paging: true,
+        pageSize: 20,
         actionsColumnIndex: -1,
         loadingType: 'linear',
         showEmptyDataSourceMessage: !loading,
+        padding: 'dense',
+        pageSizeOptions: [20, 50, 100],
       }}
       title={`${titlePreamble} (${(entities && entities.length) || 0})`}
       data={entities}

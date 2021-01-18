@@ -34,6 +34,29 @@ describe('errorHandler', () => {
     expect(response.text).toBe('some message');
   });
 
+  it('doesnt try to send the response again if its already been sent', async () => {
+    const app = express();
+    const mockSend = jest.fn();
+
+    app.use('/works_with_async_fail', (_, res) => {
+      res.status(200).send('hello');
+
+      // mutate the response object to test the middlware.
+      // it's hard to catch errors inside middleware from the outside.
+      // @ts-ignore
+      res.send = mockSend;
+      throw new Error('some message');
+    });
+
+    app.use(errorHandler());
+    const response = await request(app).get('/works_with_async_fail');
+
+    expect(response.status).toBe(200);
+    expect(response.text).toBe('hello');
+
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
   it('takes code from http-errors library errors', async () => {
     const app = express();
     app.use('/breaks', () => {
@@ -72,5 +95,39 @@ describe('errorHandler', () => {
     expect((await r.get('/NotAllowedError')).status).toBe(403);
     expect((await r.get('/NotFoundError')).status).toBe(404);
     expect((await r.get('/ConflictError')).status).toBe(409);
+  });
+
+  it('logs all 500 errors', async () => {
+    const app = express();
+
+    const mockLogger = { child: jest.fn(), error: jest.fn() };
+    mockLogger.child.mockImplementation(() => mockLogger as any);
+
+    const thrownError = new Error('some error');
+
+    app.use('/breaks', () => {
+      throw thrownError;
+    });
+    app.use(errorHandler({ logger: mockLogger as any }));
+
+    await request(app).get('/breaks');
+
+    expect(mockLogger.error).toHaveBeenCalledWith(thrownError);
+  });
+
+  it('does not log 400 errors', async () => {
+    const app = express();
+
+    const mockLogger = { child: jest.fn(), error: jest.fn() };
+    mockLogger.child.mockImplementation(() => mockLogger as any);
+
+    app.use('/NotFound', () => {
+      throw new errors.NotFoundError();
+    });
+    app.use(errorHandler({ logger: mockLogger as any }));
+
+    await request(app).get('/NotFound');
+
+    expect(mockLogger.error).not.toHaveBeenCalled();
   });
 });

@@ -13,26 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { createApiRef } from '../ApiRef';
+import { ApiRef, createApiRef } from '../system';
+import { Config } from '@backstage/config';
 
-export type Config = {
-  getConfig(key: string): Config;
+/**
+ * The Config API is used to provide a mechanism to access the
+ * runtime configuration of the system.
+ */
+export type ConfigApi = Config;
 
-  getConfigArray(key: string): Config[];
-
-  getNumber(key: string): number | undefined;
-
-  getBoolean(key: string): boolean | undefined;
-
-  getString(key: string): string | undefined;
-
-  getStringArray(key: string): string[] | undefined;
-};
-
-// Using interface to make the ConfigApi name show up in docs
-export interface ConfigApi extends Config {}
-
-export const configApiRef = createApiRef<ConfigApi>({
+export const configApiRef: ApiRef<ConfigApi> = createApiRef({
   id: 'core.config',
   description: 'Used to access runtime configuration',
 });

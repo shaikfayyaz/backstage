@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+import { JsonObject } from '@backstage/config';
+import { EntityName } from '../types';
+
 /**
  * The format envelope that's common to all versions/kinds of entity.
  *
@@ -39,7 +42,12 @@ export type Entity = {
   /**
    * The specification data describing the entity itself.
    */
-  spec?: object;
+  spec?: JsonObject;
+
+  /**
+   * The relations that this entity has with other entities.
+   */
+  relations?: EntityRelation[];
 };
 
 /**
@@ -48,7 +56,7 @@ export type Entity = {
  * @see https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta
  * @see https://kubernetes.io/docs/concepts/overview/working-with-objects/kubernetes-objects/
  */
-export type EntityMeta = {
+export type EntityMeta = JsonObject & {
   /**
    * A globally unique ID for the entity.
    *
@@ -85,7 +93,7 @@ export type EntityMeta = {
   /**
    * The name of the entity.
    *
-   * Must be uniqe within the catalog at any given point in time, for any
+   * Must be unique within the catalog at any given point in time, for any
    * given namespace + kind pair.
    */
   name: string;
@@ -94,6 +102,12 @@ export type EntityMeta = {
    * The namespace that the entity belongs to.
    */
   namespace?: string;
+
+  /**
+   * A short (typically relatively few words, on one line) description of the
+   * entity.
+   */
+  description?: string;
 
   /**
    * Key/value pairs of identifying information attached to the entity.
@@ -105,4 +119,45 @@ export type EntityMeta = {
    * entity.
    */
   annotations?: Record<string, string>;
+
+  /**
+   * A list of single-valued strings, to for example classify catalog entities in
+   * various ways.
+   */
+  tags?: string[];
+};
+
+/**
+ * A relation of a specific type to another entity in the catalog.
+ */
+export type EntityRelation = {
+  /**
+   * The type of the relation.
+   */
+  type: string;
+
+  /**
+   * The target entity of this relation.
+   */
+  target: EntityName;
+};
+
+/**
+ * Holds the relation data for entities.
+ */
+export type EntityRelationSpec = {
+  /**
+   * The source entity of this relation.
+   */
+  source: EntityName;
+
+  /**
+   * The type of the relation.
+   */
+  type: string;
+
+  /**
+   * The target entity of this relation.
+   */
+  target: EntityName;
 };

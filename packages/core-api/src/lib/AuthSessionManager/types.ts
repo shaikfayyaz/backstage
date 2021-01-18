@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+import { Observable } from '../../types';
+import { SessionState } from '../../apis';
+
 export type GetSessionOptions = {
   optional?: boolean;
   instantPopup?: boolean;
@@ -29,7 +32,16 @@ export type SessionManager<T> = {
   getSession(options: GetSessionOptions): Promise<T | undefined>;
 
   removeSession(): Promise<void>;
+
+  sessionState$(): Observable<SessionState>;
 };
+
+/**
+ * An extension of the session manager where the session can also be pushed from the manager.
+ */
+export interface MutableSessionManager<T> extends SessionManager<T> {
+  setSession(session: T | undefined): void;
+}
 
 /**
  * A function called to determine the scopes of a session.

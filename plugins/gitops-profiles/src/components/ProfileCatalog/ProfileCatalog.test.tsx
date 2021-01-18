@@ -16,19 +16,34 @@
 
 import React from 'react';
 import { render } from '@testing-library/react';
-import mockFetch from 'jest-fetch-mock';
 import ProfileCatalog from './ProfileCatalog';
 import { ThemeProvider } from '@material-ui/core';
 import { lightTheme } from '@backstage/theme';
-import { ApiProvider, ApiRegistry } from '@backstage/core-api';
+import {
+  ApiProvider,
+  ApiRegistry,
+  githubAuthApiRef,
+  GithubAuth,
+  OAuthRequestManager,
+  UrlPatternDiscovery,
+} from '@backstage/core';
 import { gitOpsApiRef, GitOpsRestApi } from '../../api';
 
 describe('ProfileCatalog', () => {
   it('should render', () => {
+    const oauthRequestApi = new OAuthRequestManager();
     const apis = ApiRegistry.from([
       [gitOpsApiRef, new GitOpsRestApi('http://localhost:3008')],
+      [
+        githubAuthApiRef,
+        GithubAuth.create({
+          discoveryApi: UrlPatternDiscovery.compile(
+            'http://example.com/{{pluginId}}',
+          ),
+          oauthRequestApi,
+        }),
+      ],
     ]);
-    mockFetch.mockResponse(() => new Promise(() => {}));
     const rendered = render(
       <ThemeProvider theme={lightTheme}>
         <ApiProvider apis={apis}>

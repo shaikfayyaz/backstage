@@ -16,6 +16,7 @@
 
 import {
   SessionManager,
+  MutableSessionManager,
   SessionScopesFunc,
   SessionShouldRefreshFunc,
   GetSessionOptions,
@@ -24,11 +25,11 @@ import { SessionScopeHelper } from './common';
 
 type Options<T> = {
   /** The connector used for acting on the auth session */
-  manager: SessionManager<T>;
+  manager: MutableSessionManager<T>;
   /** Storage key to use to store sessions */
   storageKey: string;
   /** Used to get the scope of the session */
-  sessionScopes: SessionScopesFunc<T>;
+  sessionScopes?: SessionScopesFunc<T>;
   /** Used to check if the session needs to be refreshed, defaults to never refresh */
   sessionShouldRefresh?: SessionShouldRefreshFunc<T>;
 };
@@ -36,9 +37,11 @@ type Options<T> = {
 /**
  * AuthSessionStore decorates another SessionManager with a functionality
  * to store the session in local storage.
+ *
+ * Session is serialized to JSON with special support for following types: Set.
  */
 export class AuthSessionStore<T> implements SessionManager<T> {
-  private readonly manager: SessionManager<T>;
+  private readonly manager: MutableSessionManager<T>;
   private readonly storageKey: string;
   private readonly sessionShouldRefreshFunc: SessionShouldRefreshFunc<T>;
   private readonly helper: SessionScopeHelper<T>;
@@ -68,6 +71,7 @@ export class AuthSessionStore<T> implements SessionManager<T> {
       const shouldRefresh = this.sessionShouldRefreshFunc(session!);
 
       if (!shouldRefresh) {
+        this.manager.setSession(session!);
         return session!;
       }
     }
@@ -82,11 +86,20 @@ export class AuthSessionStore<T> implements SessionManager<T> {
     await this.manager.removeSession();
   }
 
+  sessionState$() {
+    return this.manager.sessionState$();
+  }
+
   private loadSession(): T | undefined {
     try {
       const sessionJson = localStorage.getItem(this.storageKey);
       if (sessionJson) {
-        const session = JSON.parse(sessionJson);
+        const session = JSON.parse(sessionJson, (_key, value) => {
+          if (value?.__type === 'Set') {
+            return new Set(value.__value);
+          }
+          return value;
+        });
         return session;
       }
 
@@ -101,7 +114,18 @@ export class AuthSessionStore<T> implements SessionManager<T> {
     if (session === undefined) {
       localStorage.removeItem(this.storageKey);
     } else {
-      localStorage.setItem(this.storageKey, JSON.stringify(session));
+      localStorage.setItem(
+        this.storageKey,
+        JSON.stringify(session, (_key, value) => {
+          if (value instanceof Set) {
+            return {
+              __type: 'Set',
+              __value: Array.from(value),
+            };
+          }
+          return value;
+        }),
+      );
     }
   }
 }

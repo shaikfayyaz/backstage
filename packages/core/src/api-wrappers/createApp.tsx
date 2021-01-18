@@ -14,20 +14,21 @@
  * limitations under the License.
  */
 
-import React, { FC } from 'react';
+import React from 'react';
 import privateExports, {
   AppOptions,
-  ApiRegistry,
   defaultSystemIcons,
   BootErrorPageProps,
   AppConfigLoader,
 } from '@backstage/core-api';
 import { BrowserRouter, MemoryRouter } from 'react-router-dom';
-
+import LightIcon from '@material-ui/icons/WbSunny';
+import DarkIcon from '@material-ui/icons/Brightness2';
 import { ErrorPage } from '../layout/ErrorPage';
-import Progress from '../components/Progress';
+import { Progress } from '../components/Progress';
+import { defaultApis } from './defaultApis';
 import { lightTheme, darkTheme } from '@backstage/theme';
-import { AppConfig } from '@backstage/config';
+import { AppConfig, JsonObject } from '@backstage/config';
 
 const { PrivateAppImpl } = privateExports;
 
@@ -59,12 +60,24 @@ export const defaultConfigLoader: AppConfigLoader = async (
   // Avoiding this string also being replaced at runtime
   if (runtimeConfigJson !== '__app_injected_runtime_config__'.toUpperCase()) {
     try {
-      configs.unshift(JSON.parse(runtimeConfigJson));
+      const data = JSON.parse(runtimeConfigJson) as JsonObject;
+      if (Array.isArray(data)) {
+        configs.push(...data);
+      } else {
+        configs.push({ data, context: 'env' });
+      }
     } catch (error) {
       throw new Error(`Failed to load runtime configuration, ${error}`);
     }
   }
 
+  const windowAppConfig = (window as any).__APP_CONFIG__;
+  if (windowAppConfig) {
+    configs.push({
+      context: 'window',
+      data: windowAppConfig,
+    });
+  }
   return configs;
 };
 
@@ -80,7 +93,7 @@ export function createApp(options?: AppOptions) {
   const DefaultNotFoundPage = () => (
     <ErrorPage status="404" statusMessage="PAGE NOT FOUND" />
   );
-  const DefaultBootErrorPage: FC<BootErrorPageProps> = ({ step, error }) => {
+  const DefaultBootErrorPage = ({ step, error }: BootErrorPageProps) => {
     let message = '';
     if (step === 'load-config') {
       message = `The configuration failed to load, someone should have a look at this error: ${error.message}`;
@@ -93,7 +106,7 @@ export function createApp(options?: AppOptions) {
     );
   };
 
-  const apis = options?.apis ?? ApiRegistry.from([]);
+  const apis = options?.apis ?? [];
   const icons = { ...defaultSystemIcons, ...options?.icons };
   const plugins = options?.plugins ?? [];
   const components = {
@@ -109,12 +122,14 @@ export function createApp(options?: AppOptions) {
       title: 'Light Theme',
       variant: 'light',
       theme: lightTheme,
+      icon: <LightIcon />,
     },
     {
       id: 'dark',
       title: 'Dark Theme',
       variant: 'dark',
       theme: darkTheme,
+      icon: <DarkIcon />,
     },
   ];
   const configLoader = options?.configLoader ?? defaultConfigLoader;
@@ -126,6 +141,8 @@ export function createApp(options?: AppOptions) {
     components,
     themes,
     configLoader,
+    defaultApis,
+    bindRoutes: options?.bindRoutes,
   });
 
   app.verify();

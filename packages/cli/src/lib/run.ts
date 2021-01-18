@@ -23,6 +23,7 @@ import {
 import { ExitCodeError } from './errors';
 import { promisify } from 'util';
 import { LogFunc } from './logging';
+
 const execFile = promisify(execFileCb);
 
 type SpawnOptionsPartialEnv = Omit<SpawnOptions, 'env'> & {
@@ -91,7 +92,7 @@ export async function runCheck(cmd: string, ...args: string[]) {
 }
 
 export async function waitForExit(
-  child: ChildProcess & { exitCode?: number },
+  child: ChildProcess & { exitCode: number | null },
   name?: string,
 ): Promise<void> {
   if (typeof child.exitCode === 'number') {
@@ -101,7 +102,7 @@ export async function waitForExit(
     return;
   }
 
-  await new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     child.once('error', error => reject(error));
     child.once('exit', code => {
       if (code) {

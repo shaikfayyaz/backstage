@@ -15,43 +15,9 @@
  */
 
 import GoogleIcon from '@material-ui/icons/AcUnit';
-import { DefaultAuthConnector } from '../../../../lib/AuthConnector';
-import { GoogleSession } from './types';
-import {
-  OAuthApi,
-  OpenIdConnectApi,
-  IdTokenOptions,
-  AccessTokenOptions,
-  ProfileInfoApi,
-  ProfileInfoOptions,
-  ProfileInfo,
-  SessionStateApi,
-  SessionState,
-} from '../../../definitions/auth';
-import { OAuthRequestApi, AuthProvider } from '../../../definitions';
-import { SessionManager } from '../../../../lib/AuthSessionManager/types';
-import { RefreshingAuthSessionManager } from '../../../../lib/AuthSessionManager';
-import { Observable } from '../../../../types';
-import { SessionStateTracker } from '../../../../lib/AuthSessionManager/SessionStateTracker';
-
-type CreateOptions = {
-  // TODO(Rugvip): These two should be grabbed from global config when available, they're not unique to GoogleAuth
-  apiOrigin: string;
-  basePath: string;
-
-  oauthRequestApi: OAuthRequestApi;
-
-  environment?: string;
-  provider?: AuthProvider & { id: string };
-};
-
-export type GoogleAuthResponse = {
-  profile: ProfileInfo;
-  accessToken: string;
-  idToken: string;
-  scope: string;
-  expiresInSeconds: number;
-};
+import { googleAuthApiRef } from '../../../definitions/auth';
+import { OAuth2 } from '../oauth2';
+import { OAuthApiCreateOptions } from '../types';
 
 const DEFAULT_PROVIDER = {
   id: 'google',
@@ -61,122 +27,42 @@ const DEFAULT_PROVIDER = {
 
 const SCOPE_PREFIX = 'https://www.googleapis.com/auth/';
 
-class GoogleAuth
-  implements OAuthApi, OpenIdConnectApi, ProfileInfoApi, SessionStateApi {
+class GoogleAuth {
   static create({
-    apiOrigin,
-    basePath,
+    discoveryApi,
+    oauthRequestApi,
     environment = 'development',
     provider = DEFAULT_PROVIDER,
-    oauthRequestApi,
-  }: CreateOptions) {
-    const connector = new DefaultAuthConnector({
-      apiOrigin,
-      basePath,
-      environment,
+    defaultScopes = [
+      'openid',
+      `${SCOPE_PREFIX}userinfo.email`,
+      `${SCOPE_PREFIX}userinfo.profile`,
+    ],
+  }: OAuthApiCreateOptions): typeof googleAuthApiRef.T {
+    return OAuth2.create({
+      discoveryApi,
+      oauthRequestApi,
       provider,
-      oauthRequestApi: oauthRequestApi,
-      sessionTransform(res: GoogleAuthResponse): GoogleSession {
-        return {
-          profile: res.profile,
-          idToken: res.idToken,
-          accessToken: res.accessToken,
-          scopes: GoogleAuth.normalizeScopes(res.scope),
-          expiresAt: new Date(Date.now() + res.expiresInSeconds * 1000),
-        };
+      environment,
+      defaultScopes,
+      scopeTransform(scopes: string[]) {
+        return scopes.map(scope => {
+          if (scope === 'openid') {
+            return scope;
+          }
+
+          if (scope === 'profile' || scope === 'email') {
+            return `${SCOPE_PREFIX}userinfo.${scope}`;
+          }
+
+          if (scope.startsWith(SCOPE_PREFIX)) {
+            return scope;
+          }
+
+          return `${SCOPE_PREFIX}${scope}`;
+        });
       },
     });
-
-    const sessionManager = new RefreshingAuthSessionManager({
-      connector,
-      defaultScopes: new Set([
-        'openid',
-        `${SCOPE_PREFIX}userinfo.email`,
-        `${SCOPE_PREFIX}userinfo.profile`,
-      ]),
-      sessionScopes: session => session.scopes,
-      sessionShouldRefresh: session => {
-        const expiresInSec = (session.expiresAt.getTime() - Date.now()) / 1000;
-        return expiresInSec < 60 * 5;
-      },
-    });
-
-    return new GoogleAuth(sessionManager);
-  }
-
-  private readonly sessionStateTracker = new SessionStateTracker();
-
-  sessionState$(): Observable<SessionState> {
-    return this.sessionStateTracker.observable;
-  }
-
-  constructor(private readonly sessionManager: SessionManager<GoogleSession>) {}
-
-  async getAccessToken(
-    scope?: string | string[],
-    options?: AccessTokenOptions,
-  ) {
-    const normalizedScopes = GoogleAuth.normalizeScopes(scope);
-    const session = await this.sessionManager.getSession({
-      ...options,
-      scopes: normalizedScopes,
-    });
-    this.sessionStateTracker.setIsSignedId(!!session);
-    if (session) {
-      return session.accessToken;
-    }
-    return '';
-  }
-
-  async getIdToken(options: IdTokenOptions = {}) {
-    const session = await this.sessionManager.getSession(options);
-    this.sessionStateTracker.setIsSignedId(!!session);
-    if (session) {
-      return session.idToken;
-    }
-    return '';
-  }
-
-  async logout() {
-    await this.sessionManager.removeSession();
-    this.sessionStateTracker.setIsSignedId(false);
-  }
-
-  async getProfile(options: ProfileInfoOptions = {}) {
-    const session = await this.sessionManager.getSession(options);
-    this.sessionStateTracker.setIsSignedId(!!session);
-    if (!session) {
-      return undefined;
-    }
-    return session.profile;
-  }
-
-  static normalizeScopes(scopes?: string | string[]): Set<string> {
-    if (!scopes) {
-      return new Set();
-    }
-
-    const scopeList = Array.isArray(scopes)
-      ? scopes
-      : scopes.split(/[\s]/).filter(Boolean);
-
-    const normalizedScopes = scopeList.map(scope => {
-      if (scope === 'openid') {
-        return scope;
-      }
-
-      if (scope === 'profile' || scope === 'email') {
-        return `${SCOPE_PREFIX}userinfo.${scope}`;
-      }
-
-      if (scope.startsWith(SCOPE_PREFIX)) {
-        return scope;
-      }
-
-      return `${SCOPE_PREFIX}${scope}`;
-    });
-
-    return new Set(normalizedScopes);
   }
 }
 export default GoogleAuth;

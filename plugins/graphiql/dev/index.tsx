@@ -15,15 +15,25 @@
  */
 
 import { createDevApp } from '@backstage/dev-utils';
+import { githubAuthApiRef, errorApiRef } from '@backstage/core';
 import { plugin, GraphQLEndpoints, graphQlBrowseApiRef } from '../src';
 
 createDevApp()
   .registerPlugin(plugin)
-  .registerApiFactory({
-    implements: graphQlBrowseApiRef,
-    deps: {},
-    factory() {
+  .registerApi({
+    api: graphQlBrowseApiRef,
+    deps: {
+      errorApi: errorApiRef,
+      githubAuthApi: githubAuthApiRef,
+    },
+    factory({ errorApi, githubAuthApi }) {
       return GraphQLEndpoints.from([
+        GraphQLEndpoints.github({
+          id: 'github',
+          title: 'GitHub',
+          errorApi,
+          githubAuthApi,
+        }),
         GraphQLEndpoints.create({
           id: 'gitlab',
           title: 'GitLab',

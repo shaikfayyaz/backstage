@@ -13,19 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 import * as winston from 'winston';
+import { coloredFormat } from './formats';
 
 let rootLogger: winston.Logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format:
     process.env.NODE_ENV === 'production'
       ? winston.format.json()
-      : winston.format.combine(
-          winston.format.colorize(),
-          winston.format.timestamp(),
-          winston.format.simple(),
-        ),
+      : coloredFormat,
   defaultMeta: { service: 'backstage' },
   transports: [
     new winston.transports.Console({

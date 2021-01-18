@@ -23,7 +23,7 @@ describe('FieldFormatEntityPolicy', () => {
 
   beforeEach(() => {
     data = yaml.parse(`
-      apiVersion: backstage.io/v1beta1
+      apiVersion: backstage.io/v1alpha1
       kind: Component
       metadata:
         uid: e01199ab-08cc-44c2-8e19-5c29ded82521
@@ -35,6 +35,9 @@ describe('FieldFormatEntityPolicy', () => {
           backstage.io/custom: ValueStuff
         annotations:
           example.com/bindings: are-secret
+        tags:
+          - java
+          - data-service
       spec:
         custom: stuff
     `);
@@ -101,5 +104,10 @@ describe('FieldFormatEntityPolicy', () => {
   it('rejects bad annotation value', async () => {
     data.metadata.annotations.a = 7;
     await expect(policy.enforce(data)).rejects.toThrow(/annotation.*7/i);
+  });
+
+  it('rejects bad tag value', async () => {
+    data.metadata.tags.push('Hello World');
+    await expect(policy.enforce(data)).rejects.toThrow(/tags.*"Hello World"/i);
   });
 });

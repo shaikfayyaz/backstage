@@ -15,7 +15,24 @@
  */
 
 import fs from 'fs-extra';
+import path from 'path';
 import { paths } from '../paths';
+
+/**
+ * Checks if dir is the same as or a child of base.
+ */
+export function isChildPath(base: string, dir: string): boolean {
+  const relativePath = path.relative(base, dir);
+  if (relativePath === '') {
+    // The same directory
+    return true;
+  }
+
+  const outsideBase = relativePath.startsWith('..'); // not outside base
+  const differentDrive = path.isAbsolute(relativePath); // on Windows, this means dir is on a different drive from base.
+
+  return !outsideBase && !differentDrive;
+}
 
 export type BundlingPathsOptions = {
   // bundle entrypoint, e.g. 'src/index'
@@ -48,18 +65,24 @@ export function resolveBundlingPaths(options: BundlingPathsOptions) {
     }
   }
 
+  // Backend plugin dev run file
+  const targetRunFile = paths.resolveTarget('src/run.ts');
+  const runFileExists = fs.pathExistsSync(targetRunFile);
+
   return {
     targetHtml,
     targetPublic,
     targetPath: paths.resolveTarget('.'),
+    targetRunFile: runFileExists ? targetRunFile : undefined,
     targetDist: paths.resolveTarget('dist'),
     targetAssets: paths.resolveTarget('assets'),
     targetSrc: paths.resolveTarget('src'),
     targetDev: paths.resolveTarget('dev'),
     targetEntry: resolveTargetModule(entry),
     targetTsConfig: paths.resolveTargetRoot('tsconfig.json'),
-    targetNodeModules: paths.resolveTarget('node_modules'),
     targetPackageJson: paths.resolveTarget('package.json'),
+    rootNodeModules: paths.resolveTargetRoot('node_modules'),
+    root: paths.targetRoot,
   };
 }
 

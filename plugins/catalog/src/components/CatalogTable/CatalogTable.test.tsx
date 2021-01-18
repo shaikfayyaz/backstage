@@ -15,24 +15,23 @@
  */
 
 import { Entity } from '@backstage/catalog-model';
-import { wrapInTestApp } from '@backstage/test-utils';
-import { render } from '@testing-library/react';
+import { renderWithEffects, wrapInTestApp } from '@backstage/test-utils';
 import * as React from 'react';
 import { CatalogTable } from './CatalogTable';
 
-const entites: Entity[] = [
+const entities: Entity[] = [
   {
-    apiVersion: 'backstage.io/v1beta1',
+    apiVersion: 'backstage.io/v1alpha1',
     kind: 'Component',
     metadata: { name: 'component1' },
   },
   {
-    apiVersion: 'backstage.io/v1beta1',
+    apiVersion: 'backstage.io/v1alpha1',
     kind: 'Component',
     metadata: { name: 'component2' },
   },
   {
-    apiVersion: 'backstage.io/v1beta1',
+    apiVersion: 'backstage.io/v1alpha1',
     kind: 'Component',
     metadata: { name: 'component3' },
   },
@@ -40,7 +39,7 @@ const entites: Entity[] = [
 
 describe('CatalogTable component', () => {
   it('should render error message when error is passed in props', async () => {
-    const rendered = render(
+    const rendered = await renderWithEffects(
       wrapInTestApp(
         <CatalogTable
           titlePreamble="Owned"
@@ -57,20 +56,18 @@ describe('CatalogTable component', () => {
   });
 
   it('should display entity names when loading has finished and no error occurred', async () => {
-    const rendered = render(
+    const rendered = await renderWithEffects(
       wrapInTestApp(
         <CatalogTable
           titlePreamble="Owned"
-          entities={entites}
+          entities={entities}
           loading={false}
         />,
       ),
     );
-    expect(
-      await rendered.findByText(`Owned (${entites.length})`),
-    ).toBeInTheDocument();
-    expect(await rendered.findByText('component1')).toBeInTheDocument();
-    expect(await rendered.findByText('component2')).toBeInTheDocument();
-    expect(await rendered.findByText('component3')).toBeInTheDocument();
+    expect(rendered.getByText(/Owned \(3\)/)).toBeInTheDocument();
+    expect(rendered.getByText(/component1/)).toBeInTheDocument();
+    expect(rendered.getByText(/component2/)).toBeInTheDocument();
+    expect(rendered.getByText(/component3/)).toBeInTheDocument();
   });
 });

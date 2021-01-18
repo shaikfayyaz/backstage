@@ -14,57 +14,118 @@
  * limitations under the License.
  */
 
+import { CatalogApi } from '@backstage/catalog-client';
+import {
+  Entity,
+  RELATION_MEMBER_OF,
+  RELATION_OWNED_BY,
+} from '@backstage/catalog-model';
 import {
   ApiProvider,
   ApiRegistry,
-  errorApiRef,
+  IdentityApi,
+  identityApiRef,
+  ProfileInfo,
   storageApiRef,
-  WebStorage,
 } from '@backstage/core';
-import { MockErrorApi, wrapInTestApp } from '@backstage/test-utils';
-import { render } from '@testing-library/react';
+import { MockStorageApi, wrapInTestApp } from '@backstage/test-utils';
+import { fireEvent, render } from '@testing-library/react';
 import React from 'react';
-import { catalogApiRef } from '../..';
-import { CatalogApi } from '../../api/types';
+import { EntityFilterGroupsProvider } from '../../filter';
+import { catalogApiRef } from '../../plugin';
 import { CatalogPage } from './CatalogPage';
-import { Entity } from '@backstage/catalog-model';
 
 describe('CatalogPage', () => {
-  const mockErrorApi = new MockErrorApi();
   const catalogApi: Partial<CatalogApi> = {
     getEntities: () =>
-      Promise.resolve([
-        {
-          metadata: {
-            name: 'Entity1',
+      Promise.resolve({
+        items: [
+          {
+            apiVersion: 'backstage.io/v1alpha1',
+            kind: 'Component',
+            metadata: {
+              name: 'Entity1',
+            },
+            spec: {
+              owner: 'tools@example.com',
+              type: 'service',
+            },
+            relations: [
+              {
+                type: RELATION_OWNED_BY,
+                target: { kind: 'Group', name: 'tools', namespace: 'default' },
+              },
+            ],
           },
-          apiVersion: 'backstage.io/v1beta1',
-          kind: 'Component',
-        },
-      ] as Entity[]),
+          {
+            apiVersion: 'backstage.io/v1alpha1',
+            kind: 'Component',
+            metadata: {
+              name: 'Entity2',
+            },
+            spec: {
+              owner: 'not-tools@example.com',
+              type: 'service',
+            },
+            relations: [
+              {
+                type: RELATION_OWNED_BY,
+                target: {
+                  kind: 'Group',
+                  name: 'not-tools',
+                  namespace: 'default',
+                },
+              },
+            ],
+          },
+        ] as Entity[],
+      }),
     getLocationByEntity: () =>
       Promise.resolve({ id: 'id', type: 'github', target: 'url' }),
+    getEntityByName: async entityName => {
+      return {
+        apiVersion: 'backstage.io/v1alpha1',
+        kind: 'User',
+        metadata: { name: entityName.name },
+        relations: [
+          {
+            type: RELATION_MEMBER_OF,
+            target: { namespace: 'default', kind: 'Group', name: 'tools' },
+          },
+        ],
+      };
+    },
   };
+  const testProfile: Partial<ProfileInfo> = {
+    displayName: 'Display Name',
+  };
+  const identityApi: Partial<IdentityApi> = {
+    getUserId: () => 'tools@example.com',
+    getProfile: () => testProfile,
+  };
+
+  const renderWrapped = (children: React.ReactNode) =>
+    render(
+      wrapInTestApp(
+        <ApiProvider
+          apis={ApiRegistry.from([
+            [catalogApiRef, catalogApi],
+            [identityApiRef, identityApi],
+            [storageApiRef, MockStorageApi.create()],
+          ])}
+        >
+          <EntityFilterGroupsProvider>{children}</EntityFilterGroupsProvider>,
+        </ApiProvider>,
+      ),
+    );
 
   // this test right now causes some red lines in the log output when running tests
   // related to some theme issues in mui-table
   // https://github.com/mbrn/material-table/issues/1293
   it('should render', async () => {
-    const rendered = render(
-      wrapInTestApp(
-        <ApiProvider
-          apis={ApiRegistry.from([
-            [errorApiRef, mockErrorApi],
-            [catalogApiRef, catalogApi],
-            [storageApiRef, new WebStorage('@mock', mockErrorApi)],
-          ])}
-        >
-          <CatalogPage />
-        </ApiProvider>,
-      ),
-    );
-    expect(
-      await rendered.findByText('Keep track of your software'),
-    ).toBeInTheDocument();
+    const { findByText, getByText } = renderWrapped(<CatalogPage />);
+    expect(await findByText(/Owned \(1\)/)).toBeInTheDocument();
+    fireEvent.click(getByText(/All/));
+    expect(await findByText(/All \(2\)/)).toBeInTheDocument();
   });
 });

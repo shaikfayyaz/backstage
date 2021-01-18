@@ -15,6 +15,7 @@
  */
 
 import yaml from 'yaml';
+import { ENTITY_DEFAULT_NAMESPACE } from '../constants';
 import { DefaultNamespaceEntityPolicy } from './DefaultNamespaceEntityPolicy';
 
 describe('DefaultNamespaceEntityPolicy', () => {
@@ -24,13 +25,13 @@ describe('DefaultNamespaceEntityPolicy', () => {
 
   beforeEach(() => {
     withoutNamespace = yaml.parse(`
-      apiVersion: backstage.io/v1beta1
+      apiVersion: backstage.io/v1alpha1
       kind: Component
       metadata:
         name: my-component-yay
     `);
     withNamespace = yaml.parse(`
-      apiVersion: backstage.io/v1beta1
+      apiVersion: backstage.io/v1alpha1
       kind: Component
       metadata:
         name: my-component-yay
@@ -54,7 +55,10 @@ describe('DefaultNamespaceEntityPolicy', () => {
     await expect(result).resolves.not.toBe(withoutNamespace);
     await expect(result).resolves.toEqual(
       expect.objectContaining({
-        metadata: { name: 'my-component-yay', namespace: 'default' },
+        metadata: {
+          name: 'my-component-yay',
+          namespace: ENTITY_DEFAULT_NAMESPACE,
+        },
       }),
     );
   });

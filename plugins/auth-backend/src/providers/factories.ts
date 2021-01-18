@@ -14,40 +14,27 @@
  * limitations under the License.
  */
 
-import Router from 'express-promise-router';
 import { createGithubProvider } from './github';
+import { createGitlabProvider } from './gitlab';
 import { createGoogleProvider } from './google';
+import { createOAuth2Provider } from './oauth2';
+import { createOidcProvider } from './oidc';
+import { createOktaProvider } from './okta';
 import { createSamlProvider } from './saml';
-import { AuthProviderFactory, AuthProviderConfig } from './types';
-import { Logger } from 'winston';
+import { createAuth0Provider } from './auth0';
+import { createMicrosoftProvider } from './microsoft';
+import { createOneLoginProvider } from './onelogin';
+import { AuthProviderFactory } from './types';
 
-const factories: { [providerId: string]: AuthProviderFactory } = {
+export const factories: { [providerId: string]: AuthProviderFactory } = {
   google: createGoogleProvider,
   github: createGithubProvider,
+  gitlab: createGitlabProvider,
   saml: createSamlProvider,
-};
-
-export const createAuthProviderRouter = (
-  providerId: string,
-  globalConfig: AuthProviderConfig,
-  providerConfig: any, // TODO: make this a config reader object of sorts
-  logger: Logger,
-) => {
-  const factory = factories[providerId];
-  if (!factory) {
-    throw Error(`No auth provider available for '${providerId}'`);
-  }
-
-  const provider = factory(globalConfig, providerConfig, logger);
-
-  const router = Router();
-  router.get('/start', provider.start.bind(provider));
-  router.get('/handler/frame', provider.frameHandler.bind(provider));
-  router.post('/handler/frame', provider.frameHandler.bind(provider));
-  router.post('/logout', provider.logout.bind(provider));
-  if (provider.refresh) {
-    router.get('/refresh', provider.refresh.bind(provider));
-  }
-
-  return router;
+  okta: createOktaProvider,
+  auth0: createAuth0Provider,
+  microsoft: createMicrosoftProvider,
+  oauth2: createOAuth2Provider,
+  oidc: createOidcProvider,
+  onelogin: createOneLoginProvider,
 };

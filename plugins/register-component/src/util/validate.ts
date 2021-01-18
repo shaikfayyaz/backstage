@@ -18,10 +18,7 @@ export const ComponentIdValidators = {
   httpsValidator: (value: any) =>
     (typeof value === 'string' && value.match(/^https:\/\//) !== null) ||
     'Must start with https://.',
-  masterValidator: (value: any) =>
-    (typeof value === 'string' && value.match(/\/blob\/master\//) !== null) ||
-    'Must reference a file on the master branch.',
   yamlValidator: (value: any) =>
-    (typeof value === 'string' && value.match(/.yaml$/) !== null) ||
-    "Must end with '.yaml'.",
+    (typeof value === 'string' && value.match(/\.yaml/) !== null) ||
+    "Must contain '.yaml'.",
 };

@@ -13,32 +13,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-import React, { FC, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Content,
   Header,
   Page,
-  pageTheme,
   Table,
   Progress,
   HeaderLabel,
   useApi,
+  githubAuthApiRef,
 } from '@backstage/core';
 
 import { Link } from '@material-ui/core';
 import { useParams } from 'react-router-dom';
-import { useLocalStorage } from 'react-use';
 import { gitOpsApiRef, Status } from '../../api';
 import { transformRunStatus } from '../ProfileCatalog';
 
-const ClusterPage: FC<{}> = () => {
+const ClusterPage = () => {
   const params = useParams() as { owner: string; repo: string };
-  const [loginInfo] = useLocalStorage<{
-    token: string;
-    username: string;
-    name: string;
-  }>('githubLoginDetails');
 
   const [pollingLog, setPollingLog] = useState(true);
   const [runStatus, setRunStatus] = useState<Status[]>([]);
@@ -46,6 +39,9 @@ const ClusterPage: FC<{}> = () => {
   const [showProgress, setShowProgress] = useState(true);
 
   const api = useApi(gitOpsApiRef);
+  const githubAuth = useApi(githubAuthApiRef);
+  const [githubAccessToken, setGithubAccessToken] = useState(String);
+  const [githubUsername, setGithubUsername] = useState(String);
 
   const columns = [
     { field: 'status', title: 'Status' },
@@ -53,31 +49,43 @@ const ClusterPage: FC<{}> = () => {
   ];
 
   useEffect(() => {
-    if (pollingLog) {
-      const interval = setInterval(async () => {
-        const resp = await api.fetchLog({
-          gitHubToken: loginInfo.token,
-          gitHubUser: loginInfo.username,
-          targetOrg: params.owner,
-          targetRepo: params.repo,
-        });
+    const fetchGithubUserInfo = async () => {
+      const accessToken = await githubAuth.getAccessToken(['repo', 'user']);
+      const userInfo = await api.fetchUserInfo({ accessToken });
+      setGithubAccessToken(accessToken);
+      setGithubUsername(userInfo.login);
+    };
 
-        setRunStatus(resp.result);
-        setRunLink(resp.link);
-        if (resp.status === 'completed') {
-          setPollingLog(false);
-          setShowProgress(false);
-        }
-      }, 10000);
-      return () => clearInterval(interval);
+    if (!githubAccessToken || !githubUsername) {
+      fetchGithubUserInfo();
+    } else {
+      if (pollingLog) {
+        const interval = setInterval(async () => {
+          const resp = await api.fetchLog({
+            gitHubToken: githubAccessToken,
+            gitHubUser: githubUsername,
+            targetOrg: params.owner,
+            targetRepo: params.repo,
+          });
+
+          setRunStatus(resp.result);
+          setRunLink(resp.link);
+          if (resp.status === 'completed') {
+            setPollingLog(false);
+            setShowProgress(false);
+          }
+        }, 10000);
+        return () => clearInterval(interval);
+      }
     }
+
     return () => {};
-  }, [pollingLog, api, loginInfo, params]);
+  }, [pollingLog, api, params, githubAuth, githubAccessToken, githubUsername]);
 
   return (
-    <Page theme={pageTheme.home}>
+    <Page themeId="home">
       <Header title={`Cluster ${params.owner}/${params.repo}`}>
-        <HeaderLabel label="Welcome" value={loginInfo.name} />
+        <HeaderLabel label="Welcome" value={githubUsername} />
       </Header>
       <Content>
         <Progress hidden={!showProgress} />

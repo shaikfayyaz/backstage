@@ -14,5 +14,26 @@
  * limitations under the License.
  */
 
-export type { Entity, EntityMeta } from './Entity';
+export {
+  ENTITY_DEFAULT_NAMESPACE,
+  ENTITY_META_GENERATED_FIELDS,
+} from './constants';
+export type {
+  Entity,
+  EntityMeta,
+  EntityRelation,
+  EntityRelationSpec,
+} from './Entity';
 export * from './policies';
+export {
+  getEntityName,
+  parseEntityName,
+  parseEntityRef,
+  serializeEntityRef,
+} from './ref';
+export {
+  entityHasChanges,
+  generateEntityEtag,
+  generateEntityUid,
+  generateUpdatedEntity,
+} from './util';

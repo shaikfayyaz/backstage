@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { createApiRef } from '../ApiRef';
+import { ApiRef, createApiRef } from '../system';
+import { ProfileInfo } from './auth';
 
 /**
  * The Identity API used to identify and get information about the signed in user.
@@ -29,18 +30,27 @@ export type IdentityApi = {
    */
   getUserId(): string;
 
+  // TODO: getProfile(): Promise<Profile> - We want this to be async when added, but needs more work.
+  /**
+   * The profile of the signed in user.
+   */
+  getProfile(): ProfileInfo;
+
   /**
    * An OpenID Connect ID Token which proves the identity of the signed in user.
    *
    * The ID token will be undefined if the signed in user does not have a verified
    * identity, such as a demo user or mocked user for e2e tests.
    */
-  getIdToken(): string | undefined;
+  getIdToken(): Promise<string | undefined>;
 
-  // TODO: getProfile(): Promise<Profile> - We want this to be async when added, but needs more work.
+  /**
+   * Sign out the current user
+   */
+  signOut(): Promise<void>;
 };
 
-export const identifyApiRef = createApiRef<IdentityApi>({
+export const identityApiRef: ApiRef<IdentityApi> = createApiRef({
   id: 'core.identity',
   description: 'Provides access to the identity of the signed in user',
 });

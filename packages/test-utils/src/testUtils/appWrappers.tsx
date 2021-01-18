@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import React, { ComponentType, ReactNode, FC, ReactElement } from 'react';
+import React, { ComponentType, ReactNode, ReactElement } from 'react';
 import { MemoryRouter } from 'react-router';
 import { Route } from 'react-router-dom';
 import { lightTheme } from '@backstage/theme';
@@ -24,13 +24,14 @@ import privateExports, {
 } from '@backstage/core-api';
 import { RenderResult } from '@testing-library/react';
 import { renderWithEffects } from '@backstage/test-utils-core';
-import { createMockApiRegistry } from './mockApiRegistry';
+import { mockApis } from './mockApis';
+
 const { PrivateAppImpl } = privateExports;
 
 const NotFoundErrorPage = () => {
   throw new Error('Reached NotFound Page');
 };
-const BootErrorPage: FC<BootErrorPageProps> = ({ step, error }) => {
+const BootErrorPage = ({ step, error }: BootErrorPageProps) => {
   throw new Error(`Reached BootError Page at step ${step} with error ${error}`);
 };
 const Progress = () => <div data-testid="progress" />;
@@ -57,10 +58,9 @@ export function wrapInTestApp(
   options: TestAppOptions = {},
 ): ReactElement {
   const { routeEntries = ['/'] } = options;
-  const apis = createMockApiRegistry();
 
   const app = new PrivateAppImpl({
-    apis,
+    apis: [],
     components: {
       NotFoundErrorPage,
       BootErrorPage,
@@ -79,22 +79,27 @@ export function wrapInTestApp(
         variant: 'light',
       },
     ],
+    defaultApis: mockApis,
+    bindRoutes: () => {},
   });
 
   let Wrapper: ComponentType;
   if (Component instanceof Function) {
     Wrapper = Component;
   } else {
-    Wrapper = (() => Component) as FC;
+    Wrapper = () => Component as React.ReactElement;
   }
 
   const AppProvider = app.getProvider();
+  const AppRouter = app.getRouter();
 
   return (
     <AppProvider>
-      {/* The path of * here is needed to be set as a catch all, so it will render the wrapper element
-       *  and work with nested routes if they exist too */}
-      <Route path="*" element={<Wrapper />} />
+      <AppRouter>
+        {/* The path of * here is needed to be set as a catch all, so it will render the wrapper element
+         *  and work with nested routes if they exist too */}
+        <Route path="*" element={<Wrapper />} />
+      </AppRouter>
     </AppProvider>
   );
 }

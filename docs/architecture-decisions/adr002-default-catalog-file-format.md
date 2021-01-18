@@ -1,4 +1,8 @@
-# ADR002: Default Software Catalog File Format
+---
+id: adrs-adr002
+title: ADR002: Default Software Catalog File Format
+description: Architecture Decision Record (ADR) log on Default Software Catalog File Format
+---
 
 | Created    | Status |
 | ---------- | ------ |
@@ -18,7 +22,7 @@ This ADR describes the default format of these descriptor files.
 
 ### Inspiration
 
-Internally at Spotify, a home grown software catalog system is used heavily and
+Internally at Spotify, a homegrown software catalog system is used heavily and
 forms a core part of Backstage and other important pieces of the infrastructure.
 The user experience, learnings and certain pieces of metadata from that catalog
 are being carried over to the open source effort.
@@ -35,8 +39,8 @@ inside Backstage, or by push events from a CI/CD pipelines, or by webhook
 triggers from the version control system, etc.
 
 Each file describes one or more entities in accordance with the
-[Backstage System Model](https://github.com/spotify/backstage/issues/390). All
-of these entities have a common stucture and nomenclature, and they are stored
+[Backstage System Model](https://github.com/backstage/backstage/issues/390). All
+of these entities have a common structure and nomenclature, and they are stored
 in the software catalog from which they then can be queried.
 
 Entities have distinct names, and they may reference each other by those names.
@@ -52,7 +56,7 @@ This is an example entity definition with some mocked data.
 
 ```yaml
 ---
-apiVersion: backstage.io/v1beta1
+apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
   name: frobs-awesome
@@ -64,7 +68,7 @@ metadata:
     lifecycle: production
     example.com/service-discovery-name: frobsawesome
   annotations:
-    circleci.com/project-slug: gh/example-org/frobs-awesome
+    circleci.com/project-slug: github/example-org/frobs-awesome
 spec:
   type: service
 ```
@@ -83,7 +87,7 @@ The root envelope object has the following structure.
 ### `apiVersion` and `kind`
 
 The `kind` is the high level entity type being described, typically from the
-[Backstage system model](https://github.com/spotify/backstage/issues/390). The
+[Backstage system model](https://github.com/backstage/backstage/issues/390). The
 first versions of the catalog will focus on the `Component` kind.
 
 The `apiVersion`is the version of specification format for that particular
@@ -96,8 +100,8 @@ Backstage specific entities have an `apiVersion` that is prefixed with
 same type of structure. This may be relevant when co-hosting these
 specifications with e.g. kubernetes object manifests.
 
-Early versions of the catalog will be using beta versions, e.g.
-`backstage.io/v1beta1`, to signal that the format may still change. After that,
+Early versions of the catalog will be using alpha/beta versions, e.g.
+`backstage.io/v1alpha1`, to signal that the format may still change. After that,
 we will be using `backstage.io/v1` and up.
 
 ### `metadata`
@@ -213,10 +217,10 @@ Values can be of any length, but are limited to being strings.
 
 ## Component
 
-| Field        | Value                  |
-| ------------ | ---------------------- |
-| `apiVersion` | `backstage.io/v1beta1` |
-| `kind`       | `Component`            |
+| Field        | Value                   |
+| ------------ | ----------------------- |
+| `apiVersion` | `backstage.io/v1alpha1` |
+| `kind`       | `Component`             |
 
 The `spec` object for this kind is as follows:
 

@@ -1,4 +1,8 @@
-# ADR003: Avoid Default Exports and Prefer Named Exports
+---
+id: adrs-adr003
+title: ADR003: Avoid Default Exports and Prefer Named Exports
+description: Architecture Decision Record (ADR) log on Avoid Default Exports and Prefer Named Exports
+---
 
 | Created    | Status |
 | ---------- | ------ |
@@ -40,7 +44,7 @@ A summary:
   name each.
 
 Using named exports helps prevent needing to rename symbols, which has myriad
-benefts. A few are:
+benefits. A few are:
 
 - IDE tools like "Find All References" and "Go To Definition" function
 - Manual codebase searching ("grep", etc) is easier with a unique symbol

@@ -39,10 +39,10 @@ const CONFIG_KEY_PART_PATTERN = /^[a-z][a-z0-9]*(?:[-_][a-z][a-z0-9]*)*$/i;
  *
  * APP_CONFIG_app_title='"My Title"'
  */
-export function readEnv(env: {
+export function readEnvConfig(env: {
   [name: string]: string | undefined;
 }): AppConfig[] {
-  let config: JsonObject | undefined = undefined;
+  let data: JsonObject | undefined = undefined;
 
   for (const [name, value] of Object.entries(env)) {
     if (!value) {
@@ -52,7 +52,7 @@ export function readEnv(env: {
       const key = name.replace(ENV_PREFIX, '');
       const keyParts = key.split('_');
 
-      let obj = (config = config ?? {});
+      let obj = (data = data ?? {});
       for (const [index, part] of keyParts.entries()) {
         if (!CONFIG_KEY_PART_PATTERN.test(part)) {
           throw new TypeError(`Invalid env config key '${key}'`);
@@ -72,7 +72,7 @@ export function readEnv(env: {
             );
           }
           try {
-            const parsedValue = JSON.parse(value);
+            const [, parsedValue] = safeJsonParse(value);
             if (parsedValue === null) {
               throw new Error('value may not be null');
             }
@@ -87,5 +87,13 @@ export function readEnv(env: {
     }
   }
 
-  return config ? [config] : [];
+  return data ? [{ data, context: 'env' }] : [];
+}
+
+function safeJsonParse(str: string): [Error | null, any] {
+  try {
+    return [null, JSON.parse(str)];
+  } catch (err) {
+    return [err, str];
+  }
 }

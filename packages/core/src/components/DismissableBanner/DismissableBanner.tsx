@@ -14,24 +14,30 @@
  * limitations under the License.
  */
 
-import React, { FC, ReactNode, useState, useEffect } from 'react';
+import React, { ReactNode, useState, useEffect } from 'react';
 import { useApi, storageApiRef } from '@backstage/core-api';
 import { useObservable } from 'react-use';
 import classNames from 'classnames';
-import { makeStyles, Theme } from '@material-ui/core';
+import { makeStyles } from '@material-ui/core';
+import { BackstageTheme } from '@backstage/theme';
 import Snackbar from '@material-ui/core/Snackbar';
 import SnackbarContent from '@material-ui/core/SnackbarContent';
 import IconButton from '@material-ui/core/IconButton';
 import Close from '@material-ui/icons/Close';
 
-const useStyles = makeStyles((theme: Theme) => ({
+const useStyles = makeStyles((theme: BackstageTheme) => ({
   root: {
-    position: 'relative',
     padding: theme.spacing(0),
-    marginBottom: theme.spacing(6),
-    marginTop: -theme.spacing(3),
+    marginBottom: theme.spacing(0),
+    marginTop: theme.spacing(0),
     display: 'flex',
     flexFlow: 'row nowrap',
+  },
+  // showing on top
+  topPosition: {
+    position: 'relative',
+    marginBottom: theme.spacing(6),
+    marginTop: -theme.spacing(3),
     zIndex: 'unset',
   },
   icon: {
@@ -44,12 +50,16 @@ const useStyles = makeStyles((theme: Theme) => ({
   message: {
     display: 'flex',
     alignItems: 'center',
+    color: theme.palette.banner.text,
+    '& a': {
+      color: theme.palette.banner.link,
+    },
   },
   info: {
-    backgroundColor: theme.palette.primary.main,
+    backgroundColor: theme.palette.banner.info,
   },
   error: {
-    backgroundColor: theme.palette.error.dark,
+    backgroundColor: theme.palette.banner.error,
   },
 }));
 
@@ -57,9 +67,15 @@ type Props = {
   variant: 'info' | 'error';
   message: ReactNode;
   id: string;
+  fixed?: boolean;
 };
 
-const DismissableBanner: FC<Props> = ({ variant, message, id }) => {
+export const DismissableBanner = ({
+  variant,
+  message,
+  id,
+  fixed = false,
+}: Props) => {
   const classes = useStyles();
   const storageApi = useApi(storageApiRef);
   const notificationsStore = storageApi.forBucket('notifications');
@@ -87,9 +103,15 @@ const DismissableBanner: FC<Props> = ({ variant, message, id }) => {
 
   return (
     <Snackbar
-      anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      anchorOrigin={
+        fixed
+          ? { vertical: 'bottom', horizontal: 'center' }
+          : { vertical: 'top', horizontal: 'center' }
+      }
       open={!dismissedBanners.has(id)}
-      classes={{ root: classes.root }}
+      classes={{
+        root: classNames(classes.root, !fixed && classes.topPosition),
+      }}
     >
       <SnackbarContent
         classes={{
@@ -111,5 +133,3 @@ const DismissableBanner: FC<Props> = ({ variant, message, id }) => {
     </Snackbar>
   );
 };
-
-export default DismissableBanner;

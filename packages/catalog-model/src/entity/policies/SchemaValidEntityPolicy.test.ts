@@ -24,7 +24,7 @@ describe('SchemaValidEntityPolicy', () => {
 
   beforeEach(() => {
     data = yaml.parse(`
-      apiVersion: backstage.io/v1beta1
+      apiVersion: backstage.io/v1alpha1
       kind: Component
       metadata:
         uid: e01199ab-08cc-44c2-8e19-5c29ded82521
@@ -36,6 +36,9 @@ describe('SchemaValidEntityPolicy', () => {
           backstage.io/custom: ValueStuff
         annotations:
           example.com/bindings: are-secret
+        tags:
+          - java
+          - data
       spec:
         custom: stuff
     `);
@@ -100,6 +103,11 @@ describe('SchemaValidEntityPolicy', () => {
     await expect(policy.enforce(data)).rejects.toThrow(/uid/);
   });
 
+  it('rejects empty uid', async () => {
+    data.metadata.uid = '';
+    await expect(policy.enforce(data)).rejects.toThrow(/uid/);
+  });
+
   it('accepts missing etag', async () => {
     delete data.metadata.etag;
     await expect(policy.enforce(data)).resolves.toBe(data);
@@ -110,6 +118,11 @@ describe('SchemaValidEntityPolicy', () => {
     await expect(policy.enforce(data)).rejects.toThrow(/etag/);
   });
 
+  it('rejects empty etag', async () => {
+    data.metadata.etag = '';
+    await expect(policy.enforce(data)).rejects.toThrow(/etag/);
+  });
+
   it('accepts missing generation', async () => {
     delete data.metadata.generation;
     await expect(policy.enforce(data)).resolves.toBe(data);
@@ -117,6 +130,16 @@ describe('SchemaValidEntityPolicy', () => {
 
   it('rejects bad generation type', async () => {
     data.metadata.generation = 'a';
+    await expect(policy.enforce(data)).rejects.toThrow(/generation/);
+  });
+
+  it('rejects zero generation', async () => {
+    data.metadata.generation = 0;
+    await expect(policy.enforce(data)).rejects.toThrow(/generation/);
+  });
+
+  it('rejects non-integer generation', async () => {
+    data.metadata.generation = 1.5;
     await expect(policy.enforce(data)).rejects.toThrow(/generation/);
   });
 
@@ -140,6 +163,16 @@ describe('SchemaValidEntityPolicy', () => {
     await expect(policy.enforce(data)).rejects.toThrow(/namespace/);
   });
 
+  it('accepts missing description', async () => {
+    delete data.metadata.description;
+    await expect(policy.enforce(data)).resolves.toBe(data);
+  });
+
+  it('rejects bad description type', async () => {
+    data.metadata.description = 7;
+    await expect(policy.enforce(data)).rejects.toThrow(/description/);
+  });
+
   it('accepts missing labels', async () => {
     delete data.metadata.labels;
     await expect(policy.enforce(data)).resolves.toBe(data);
@@ -158,6 +191,11 @@ describe('SchemaValidEntityPolicy', () => {
   it('rejects bad annotations type', async () => {
     data.metadata.annotations = 7;
     await expect(policy.enforce(data)).rejects.toThrow(/annotations/);
+  });
+
+  it('rejects bad tags type', async () => {
+    data.metadata.tags = 7;
+    await expect(policy.enforce(data)).rejects.toThrow(/tags/);
   });
 
   //

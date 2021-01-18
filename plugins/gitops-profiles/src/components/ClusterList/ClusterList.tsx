@@ -14,46 +14,41 @@
  * limitations under the License.
  */
 
-import React, { FC } from 'react';
+import React, { useState } from 'react';
 import {
   Content,
   ContentHeader,
   Header,
   SupportButton,
   Page,
-  pageTheme,
   Progress,
   HeaderLabel,
   useApi,
+  githubAuthApiRef,
 } from '@backstage/core';
 
 import ClusterTable from '../ClusterTable/ClusterTable';
 import { Button } from '@material-ui/core';
-import { useAsync, useLocalStorage } from 'react-use';
-import { gitOpsApiRef, ListClusterStatusesResponse } from '../../api';
+import { useAsync } from 'react-use';
+import { gitOpsApiRef } from '../../api';
 import { Alert } from '@material-ui/lab';
 
-const ClusterList: FC<{}> = () => {
-  const [loginInfo] = useLocalStorage<{
-    token: string;
-    username: string;
-    name: string;
-  }>('githubLoginDetails', {
-    token: '',
-    username: '',
-    name: 'Guest',
-  });
-
+const ClusterList = () => {
   const api = useApi(gitOpsApiRef);
+  const githubAuth = useApi(githubAuthApiRef);
+  const [githubUsername, setGithubUsername] = useState(String);
 
-  const { loading, error, value } = useAsync<ListClusterStatusesResponse>(
-    () => {
-      return api.listClusters({
-        gitHubToken: loginInfo.token,
-        gitHubUser: loginInfo.username,
-      });
-    },
-  );
+  const { loading, error, value } = useAsync(async () => {
+    const accessToken = await githubAuth.getAccessToken(['repo', 'user']);
+    if (!githubUsername) {
+      const userInfo = await api.fetchUserInfo({ accessToken });
+      setGithubUsername(userInfo.login);
+    }
+    return api.listClusters({
+      gitHubToken: accessToken,
+      gitHubUser: githubUsername,
+    });
+  });
   let content: JSX.Element;
   if (loading) {
     content = (
@@ -72,9 +67,6 @@ const ClusterList: FC<{}> = () => {
           <Alert severity="info">
             Please make sure that you start GitOps-API backend on localhost port
             3008 before using this plugin.
-          </Alert>
-          <Alert severity="info">
-            If you're Guest, please login via GitHub first.
           </Alert>
         </div>
       </Content>
@@ -98,9 +90,9 @@ const ClusterList: FC<{}> = () => {
   }
 
   return (
-    <Page theme={pageTheme.home}>
+    <Page themeId="home">
       <Header title="GitOps-managed Clusters">
-        <HeaderLabel label="Welcome" value={loginInfo.name} />
+        <HeaderLabel label="Welcome" value={githubUsername} />
       </Header>
       {content}
     </Page>

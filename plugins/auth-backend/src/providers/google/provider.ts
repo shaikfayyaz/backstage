@@ -15,58 +15,75 @@
  */
 
 import express from 'express';
+import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+import { Logger } from 'winston';
+import { CatalogIdentityClient } from '../../lib/catalog';
 import {
+  encodeState,
+  OAuthAdapter,
+  OAuthEnvironmentHandler,
+  OAuthHandlers,
+  OAuthProviderOptions,
+  OAuthRefreshRequest,
+  OAuthResponse,
+  OAuthStartRequest,
+} from '../../lib/oauth';
+import {
+  executeFetchUserProfileStrategy,
   executeFrameHandlerStrategy,
   executeRedirectStrategy,
   executeRefreshTokenStrategy,
   makeProfileInfo,
-  executeFetchUserProfileStrategy,
-} from '../../lib/PassportStrategyHelper';
-import {
-  OAuthProviderHandlers,
-  AuthInfoBase,
-  AuthInfoPrivate,
-  RedirectInfo,
-  AuthProviderConfig,
-  AuthInfoWithProfile,
-  EnvironmentProviderConfig,
-  OAuthProviderOptions,
-  OAuthProviderConfig,
-} from '../types';
-import { OAuthProvider } from '../../lib/OAuthProvider';
-import passport from 'passport';
-import {
-  EnvironmentHandler,
-  EnvironmentHandlers,
-} from '../../lib/EnvironmentHandler';
-import { Logger } from 'winston';
+  PassportDoneCallback,
+} from '../../lib/passport';
+import { AuthProviderFactory, RedirectInfo } from '../types';
 
-export class GoogleAuthProvider implements OAuthProviderHandlers {
+type PrivateInfo = {
+  refreshToken: string;
+};
+
+export type GoogleAuthProviderOptions = OAuthProviderOptions & {
+  logger: Logger;
+  identityClient: CatalogIdentityClient;
+};
+
+export class GoogleAuthProvider implements OAuthHandlers {
   private readonly _strategy: GoogleStrategy;
+  private readonly logger: Logger;
+  private readonly identityClient: CatalogIdentityClient;
 
-  constructor(options: OAuthProviderOptions) {
+  constructor(options: GoogleAuthProviderOptions) {
+    this.logger = options.logger;
+    this.identityClient = options.identityClient;
     // TODO: throw error if env variables not set?
     this._strategy = new GoogleStrategy(
-      // We need passReqToCallback set to false to get params, but there's
-      // no matching type signature for that, so instead behold this beauty
-      { ...options, passReqToCallback: false as true },
+      {
+        clientID: options.clientId,
+        clientSecret: options.clientSecret,
+        callbackURL: options.callbackUrl,
+        // We need passReqToCallback set to false to get params, but there's
+        // no matching type signature for that, so instead behold this beauty
+        passReqToCallback: false as true,
+      },
       (
         accessToken: any,
         refreshToken: any,
         params: any,
-        profile: passport.Profile,
-        done: any,
+        rawProfile: passport.Profile,
+        done: PassportDoneCallback<OAuthResponse, PrivateInfo>,
       ) => {
-        const profileInfo = makeProfileInfo(profile, params);
+        const profile = makeProfileInfo(rawProfile, params.id_token);
         done(
           undefined,
           {
-            profile: profileInfo,
-            idToken: params.id_token,
-            accessToken,
-            scope: params.scope,
-            expiresInSeconds: params.expires_in,
+            providerInfo: {
+              idToken: params.id_token,
+              accessToken,
+              scope: params.scope,
+              expiresInSeconds: params.expires_in,
+            },
+            profile,
           },
           {
             refreshToken,
@@ -76,78 +93,111 @@ export class GoogleAuthProvider implements OAuthProviderHandlers {
     );
   }
 
-  async start(req: express.Request, options: any): Promise<RedirectInfo> {
-    return await executeRedirectStrategy(req, this._strategy, options);
+  async start(req: OAuthStartRequest): Promise<RedirectInfo> {
+    return await executeRedirectStrategy(req, this._strategy, {
+      accessType: 'offline',
+      prompt: 'consent',
+      scope: req.scope,
+      state: encodeState(req.state),
+    });
   }
 
   async handler(
     req: express.Request,
-  ): Promise<{ user: AuthInfoBase; info: AuthInfoPrivate }> {
-    return await executeFrameHandlerStrategy(req, this._strategy);
+  ): Promise<{ response: OAuthResponse; refreshToken: string }> {
+    const { response, privateInfo } = await executeFrameHandlerStrategy<
+      OAuthResponse,
+      PrivateInfo
+    >(req, this._strategy);
+
+    return {
+      response: await this.populateIdentity(response),
+      refreshToken: privateInfo.refreshToken,
+    };
   }
 
-  async refresh(
-    refreshToken: string,
-    scope: string,
-  ): Promise<AuthInfoWithProfile> {
+  async refresh(req: OAuthRefreshRequest): Promise<OAuthResponse> {
     const { accessToken, params } = await executeRefreshTokenStrategy(
       this._strategy,
-      refreshToken,
-      scope,
+      req.refreshToken,
+      req.scope,
     );
 
     const profile = await executeFetchUserProfileStrategy(
       this._strategy,
       accessToken,
-      params,
+      params.id_token,
     );
 
-    return {
-      accessToken,
-      idToken: params.id_token,
-      expiresInSeconds: params.expires_in,
-      scope: params.scope,
+    return this.populateIdentity({
+      providerInfo: {
+        accessToken,
+        idToken: params.id_token,
+        expiresInSeconds: params.expires_in,
+        scope: params.scope,
+      },
       profile,
-    };
-  }
-}
-
-export function createGoogleProvider(
-  { baseUrl }: AuthProviderConfig,
-  providerConfig: EnvironmentProviderConfig,
-  logger: Logger,
-) {
-  const envProviders: EnvironmentHandlers = {};
-
-  for (const [env, envConfig] of Object.entries(providerConfig)) {
-    const config = (envConfig as unknown) as OAuthProviderConfig;
-    const { secure, appOrigin } = config;
-    const callbackURLParam = `?env=${env}`;
-    const opts = {
-      clientID: config.clientId,
-      clientSecret: config.clientSecret,
-      callbackURL: `${baseUrl}/google/handler/frame${callbackURLParam}`,
-    };
-
-    if (!opts.clientID || !opts.clientSecret) {
-      if (process.env.NODE_ENV !== 'development') {
-        throw new Error(
-          'Failed to initialize Google auth provider, set AUTH_GOOGLE_CLIENT_ID and AUTH_GOOGLE_CLIENT_SECRET env vars',
-        );
-      }
-
-      logger.warn(
-        'Google auth provider disabled, set AUTH_GOOGLE_CLIENT_ID and AUTH_GOOGLE_CLIENT_SECRET env vars to enable',
-      );
-      continue;
-    }
-
-    envProviders[env] = new OAuthProvider(new GoogleAuthProvider(opts), {
-      providerId: 'google',
-      secure,
-      baseUrl,
-      appOrigin,
     });
   }
-  return new EnvironmentHandler(envProviders);
+
+  private async populateIdentity(
+    response: OAuthResponse,
+  ): Promise<OAuthResponse> {
+    const { profile } = response;
+
+    if (!profile.email) {
+      throw new Error('Google profile contained no email');
+    }
+
+    try {
+      const user = await this.identityClient.findUser({
+        annotations: {
+          'google.com/email': profile.email,
+        },
+      });
+
+      return {
+        ...response,
+        backstageIdentity: {
+          id: user.metadata.name,
+        },
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Failed to look up user, ${error}, falling back to allowing login based on email pattern, this will probably break in the future`,
+      );
+      return {
+        ...response,
+        backstageIdentity: { id: profile.email.split('@')[0] },
+      };
+    }
+  }
 }
+
+export const createGoogleProvider: AuthProviderFactory = ({
+  providerId,
+  globalConfig,
+  config,
+  logger,
+  tokenIssuer,
+  catalogApi,
+}) =>
+  OAuthEnvironmentHandler.mapConfig(config, envConfig => {
+    const clientId = envConfig.getString('clientId');
+    const clientSecret = envConfig.getString('clientSecret');
+    const callbackUrl = `${globalConfig.baseUrl}/${providerId}/handler/frame`;
+
+    const provider = new GoogleAuthProvider({
+      clientId,
+      clientSecret,
+      callbackUrl,
+      logger,
+      identityClient: new CatalogIdentityClient({ catalogApi }),
+    });
+
+    return OAuthAdapter.fromConfig(globalConfig, provider, {
+      disableRefresh: false,
+      providerId,
+      tokenIssuer,
+    });
+  });

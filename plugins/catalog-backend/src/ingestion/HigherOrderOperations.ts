@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
-import { InputError } from '@backstage/backend-common';
-import { Entity, Location, LocationSpec } from '@backstage/catalog-model';
-import lodash from 'lodash';
+import { Location, LocationSpec } from '@backstage/catalog-model';
 import { v4 as uuidv4 } from 'uuid';
 import { Logger } from 'winston';
 import { EntitiesCatalog, LocationsCatalog } from '../catalog';
+import { durationText } from '../util';
 import {
   AddLocationResult,
   HigherOrderOperation,
@@ -34,22 +33,12 @@ import {
  * database more directly.
  */
 export class HigherOrderOperations implements HigherOrderOperation {
-  private readonly entitiesCatalog: EntitiesCatalog;
-  private readonly locationsCatalog: LocationsCatalog;
-  private readonly locationReader: LocationReader;
-  private readonly logger: Logger;
-
   constructor(
-    entitiesCatalog: EntitiesCatalog,
-    locationsCatalog: LocationsCatalog,
-    locationReader: LocationReader,
-    logger: Logger,
-  ) {
-    this.entitiesCatalog = entitiesCatalog;
-    this.locationsCatalog = locationsCatalog;
-    this.locationReader = locationReader;
-    this.logger = logger;
-  }
+    private readonly entitiesCatalog: EntitiesCatalog,
+    private readonly locationsCatalog: LocationsCatalog,
+    private readonly locationReader: LocationReader,
+    private readonly logger: Logger,
+  ) {}
 
   /**
    * Adds a single location to the catalog.
@@ -63,7 +52,12 @@ export class HigherOrderOperations implements HigherOrderOperation {
    *
    * @param spec The location to add
    */
-  async addLocation(spec: LocationSpec): Promise<AddLocationResult> {
+  async addLocation(
+    spec: LocationSpec,
+    options?: { dryRun?: boolean },
+  ): Promise<AddLocationResult> {
+    const dryRun = options?.dryRun || false;
+
     // Attempt to find a previous location matching the spec
     const previousLocations = await this.locationsCatalog.locations();
     const previousLocation = previousLocations.find(
@@ -79,11 +73,9 @@ export class HigherOrderOperations implements HigherOrderOperation {
 
     // Read the location fully, bailing on any errors
     const readerOutput = await this.locationReader.read(spec);
-    if (readerOutput.errors.length) {
+    if (!(spec.presence === 'optional') && readerOutput.errors.length) {
       const item = readerOutput.errors[0];
-      throw new InputError(
-        `Failed to read location ${item.location.type} ${item.location.target}, ${item.error}`,
-      );
+      throw item.error;
     }
 
     // TODO(freben): At this point, we could detect orphaned entities, by way
@@ -91,19 +83,27 @@ export class HigherOrderOperations implements HigherOrderOperation {
     // in the entities list. But we aren't sure what to do about those yet.
 
     // Write
-    if (!previousLocation) {
+    if (!previousLocation && !dryRun) {
+      // TODO: We do not include location operations in the dryRun. We might perform
+      // this operation as a separate dry run.
       await this.locationsCatalog.addLocation(location);
     }
-    const outputEntities: Entity[] = [];
-    for (const entity of readerOutput.entities) {
-      const out = await this.entitiesCatalog.addOrUpdateEntity(
-        entity.entity,
-        location.id,
-      );
-      outputEntities.push(out);
+    if (readerOutput.entities.length === 0) {
+      return { location, entities: [] };
     }
 
-    return { location, entities: outputEntities };
+    const writtenEntities = await this.entitiesCatalog.batchAddOrUpdateEntities(
+      readerOutput.entities,
+      {
+        locationId: dryRun ? undefined : location.id,
+        dryRun,
+        outputEntities: true,
+      },
+    );
+
+    const entities = writtenEntities.map(e => e.entity!);
+
+    return { location, entities };
   }
 
   /**
@@ -115,144 +115,88 @@ export class HigherOrderOperations implements HigherOrderOperation {
    * without changes.
    */
   async refreshAllLocations(): Promise<void> {
-    const startTimestamp = new Date().valueOf();
-    this.logger.info('Beginning locations refresh');
+    const startTimestamp = process.hrtime();
+    const logger = this.logger.child({
+      component: 'catalog-all-locations-refresh',
+    });
+
+    logger.info('Locations Refresh: Beginning locations refresh');
 
     const locations = await this.locationsCatalog.locations();
-    this.logger.info(`Visiting ${locations.length} locations`);
+    logger.info(`Locations Refresh: Visiting ${locations.length} locations`);
 
     for (const { data: location } of locations) {
-      this.logger.debug(
-        `Refreshing location id="${location.id}" type="${location.type}" target="${location.target}"`,
+      logger.info(
+        `Locations Refresh: Refreshing location ${location.type}:${location.target}`,
       );
       try {
         await this.refreshSingleLocation(location);
         await this.locationsCatalog.logUpdateSuccess(location.id, undefined);
       } catch (e) {
-        this.logger.debug(
-          `Failed to refresh location id="${location.id}" type="${location.type}" target="${location.target}", ${e}`,
+        logger.warn(
+          `Locations Refresh: Failed to refresh location ${location.type}:${location.target}, ${e.stack}`,
         );
         await this.locationsCatalog.logUpdateFailure(location.id, e);
       }
     }
 
-    const endTimestamp = new Date().valueOf();
-    const duration = ((endTimestamp - startTimestamp) / 1000).toFixed(1);
-    this.logger.debug(`Completed locations refresh in ${duration} seconds`);
+    logger.info(
+      `Locations Refresh: Completed locations refresh in ${durationText(
+        startTimestamp,
+      )}`,
+    );
   }
 
   // Performs a full refresh of a single location
   private async refreshSingleLocation(location: Location) {
+    let startTimestamp = process.hrtime();
+
     const readerOutput = await this.locationReader.read({
       type: location.type,
       target: location.target,
     });
 
     for (const item of readerOutput.errors) {
-      this.logger.debug(
-        `Failed item in location type="${item.location.type}" target="${item.location.target}", ${item.error}`,
+      this.logger.warn(
+        `Failed item in location ${item.location.type}:${item.location.target}, ${item.error.stack}`,
       );
     }
 
-    for (const item of readerOutput.entities) {
-      const { entity } = item;
+    this.logger.info(
+      `Read ${readerOutput.entities.length} entities from location ${
+        location.type
+      }:${location.target} in ${durationText(startTimestamp)}`,
+    );
 
-      this.logger.debug(
-        `Read entity kind="${entity.kind}" name="${
-          entity.metadata.name
-        }" namespace="${entity.metadata.namespace || ''}"`,
+    startTimestamp = process.hrtime();
+
+    try {
+      await this.entitiesCatalog.batchAddOrUpdateEntities(
+        readerOutput.entities,
+        { locationId: location.id },
       );
-
-      try {
-        const previous = await this.entitiesCatalog.entityByName(
-          entity.kind,
-          entity.metadata.namespace,
-          entity.metadata.name,
-        );
-
-        if (!previous) {
-          this.logger.debug(`No such entity found, adding`);
-          await this.entitiesCatalog.addOrUpdateEntity(entity, location.id);
-        } else if (!this.entitiesAreEqual(previous, entity)) {
-          this.logger.debug(`Different from existing entity, updating`);
-          await this.entitiesCatalog.addOrUpdateEntity(entity, location.id);
-        } else {
-          this.logger.debug(`Equal to existing entity, skipping update`);
-        }
-
-        await this.locationsCatalog.logUpdateSuccess(
-          location.id,
-          entity.metadata.name,
-        );
-      } catch (error) {
-        this.logger.debug(
-          `Failed refresh of entity kind="${entity.kind}" name="${
-            entity.metadata.name
-          }" namespace="${entity.metadata.namespace || ''}", ${error}`,
-        );
-
+    } catch (e) {
+      for (const entity of readerOutput.entities) {
         await this.locationsCatalog.logUpdateFailure(
           location.id,
-          error,
-          entity.metadata.name,
+          e,
+          entity.entity.metadata.name,
         );
       }
-    }
-  }
-
-  // Compares entities, ignoring generated and irrelevant data
-  private entitiesAreEqual(previous: Entity, next: Entity): boolean {
-    if (
-      previous.apiVersion !== next.apiVersion ||
-      previous.kind !== next.kind ||
-      !lodash.isEqual(previous.spec, next.spec) // Accept that {} !== undefined
-    ) {
-      return false;
+      throw e;
     }
 
-    // Since the next annotations get merged into the previous, extract only
-    // the overlapping keys and check if their values match.
-    if (next.metadata.annotations) {
-      if (!previous.metadata.annotations) {
-        return false;
-      }
-      if (
-        !lodash.isEqual(
-          next.metadata.annotations,
-          lodash.pick(
-            previous.metadata.annotations,
-            Object.keys(next.metadata.annotations),
-          ),
-        )
-      ) {
-        return false;
-      }
-    }
+    this.logger.debug(`Posting update success markers`);
 
-    const e1 = lodash.cloneDeep(previous);
-    const e2 = lodash.cloneDeep(next);
+    await this.locationsCatalog.logUpdateSuccess(
+      location.id,
+      readerOutput.entities.map(e => e.entity.metadata.name),
+    );
 
-    if (!e1.metadata.labels) {
-      e1.metadata.labels = {};
-    }
-    if (!e2.metadata.labels) {
-      e2.metadata.labels = {};
-    }
-
-    // Remove generated fields
-    delete e1.metadata.uid;
-    delete e1.metadata.etag;
-    delete e1.metadata.generation;
-    delete e2.metadata.uid;
-    delete e2.metadata.etag;
-    delete e2.metadata.generation;
-
-    // Remove already compared things
-    delete e1.metadata.annotations;
-    delete e1.spec;
-    delete e2.metadata.annotations;
-    delete e2.spec;
-
-    return lodash.isEqual(e1, e2);
+    this.logger.info(
+      `Wrote ${readerOutput.entities.length} entities from location ${
+        location.type
+      }:${location.target} in ${durationText(startTimestamp)}`,
+    );
   }
 }

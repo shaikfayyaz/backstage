@@ -15,95 +15,40 @@
  */
 
 import {
-  ApiRegistry,
-  alertApiRef,
   errorApiRef,
-  AlertApiForwarder,
-  ConfigApi,
-  ErrorApiForwarder,
-  ErrorAlerter,
-  featureFlagsApiRef,
-  FeatureFlags,
-  GoogleAuth,
-  GithubAuth,
-  oauthRequestApiRef,
-  OAuthRequestManager,
-  googleAuthApiRef,
   githubAuthApiRef,
-  storageApiRef,
-  WebStorage,
+  createApiFactory,
 } from '@backstage/core';
 
 import {
-  lighthouseApiRef,
-  LighthouseRestApi,
-} from '@backstage/plugin-lighthouse';
+  graphQlBrowseApiRef,
+  GraphQLEndpoints,
+} from '@backstage/plugin-graphiql';
 
-import { techRadarApiRef, TechRadar } from '@backstage/plugin-tech-radar';
+import {
+  costInsightsApiRef,
+  ExampleCostInsightsClient,
+} from '@backstage/plugin-cost-insights';
 
-import { CircleCIApi, circleCIApiRef } from '@backstage/plugin-circleci';
-import { catalogApiRef, CatalogClient } from '@backstage/plugin-catalog';
+export const apis = [
+  createApiFactory({
+    api: graphQlBrowseApiRef,
+    deps: { errorApi: errorApiRef, githubAuthApi: githubAuthApiRef },
+    factory: ({ errorApi, githubAuthApi }) =>
+      GraphQLEndpoints.from([
+        GraphQLEndpoints.create({
+          id: 'gitlab',
+          title: 'GitLab',
+          url: 'https://gitlab.com/api/graphql',
+        }),
+        GraphQLEndpoints.github({
+          id: 'github',
+          title: 'GitHub',
+          errorApi,
+          githubAuthApi,
+        }),
+      ]),
+  }),
 
-import { gitOpsApiRef, GitOpsRestApi } from '@backstage/plugin-gitops-profiles';
-
-export const apis = (config: ConfigApi) => {
-  // eslint-disable-next-line no-console
-  console.log(`Creating APIs for ${config.getString('app.title')}`);
-
-  const builder = ApiRegistry.builder();
-
-  const alertApi = builder.add(alertApiRef, new AlertApiForwarder());
-  const errorApi = builder.add(
-    errorApiRef,
-    new ErrorAlerter(alertApi, new ErrorApiForwarder()),
-  );
-
-  builder.add(storageApiRef, WebStorage.create({ errorApi }));
-  builder.add(circleCIApiRef, new CircleCIApi());
-  builder.add(featureFlagsApiRef, new FeatureFlags());
-
-  builder.add(lighthouseApiRef, new LighthouseRestApi('http://localhost:3003'));
-
-  const oauthRequestApi = builder.add(
-    oauthRequestApiRef,
-    new OAuthRequestManager(),
-  );
-
-  builder.add(
-    googleAuthApiRef,
-    GoogleAuth.create({
-      apiOrigin: 'http://localhost:7000',
-      basePath: '/auth/',
-      oauthRequestApi,
-    }),
-  );
-
-  builder.add(
-    githubAuthApiRef,
-    GithubAuth.create({
-      apiOrigin: 'http://localhost:7000',
-      basePath: '/auth/',
-      oauthRequestApi,
-    }),
-  );
-
-  builder.add(
-    techRadarApiRef,
-    new TechRadar({
-      width: 1500,
-      height: 800,
-    }),
-  );
-
-  builder.add(
-    catalogApiRef,
-    new CatalogClient({
-      apiOrigin: 'http://localhost:3000',
-      basePath: '/catalog/api',
-    }),
-  );
-
-  builder.add(gitOpsApiRef, new GitOpsRestApi('http://localhost:3008'));
-
-  return builder.build();
-};
+  createApiFactory(costInsightsApiRef, new ExampleCostInsightsClient()),
+];

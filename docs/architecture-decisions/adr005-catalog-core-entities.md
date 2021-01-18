@@ -1,4 +1,8 @@
-# ADR005: Catalog Core Entities
+---
+id: adrs-adr005
+title: ADR005: Catalog Core Entities
+description: Architecture Decision Record (ADR) log on Catalog Core Entities
+---
 
 | Created    | Status |
 | ---------- | ------ |
@@ -18,7 +22,7 @@ Backstage should eventually support the following core entities:
 - **Resources** are physical or virtual infrastructure needed to operate a
   component
 
-![Catalog Core Entities](catalog-core-entities.png)
+![Catalog Core Entities](../assets/architecture-decisions/catalog-core-entities.png)
 
 For now, we'll start by only implementing support for the Component entity in
 the Backstage catalog. This can later be extended to APIs, Resources and other
@@ -37,7 +41,7 @@ Component entities are typically defined in YAML descriptor files next to the
 code of the component, and could look like this (actual schema will evolve):
 
 ```yaml
-apiVersion: backstage.io/v1beta1
+apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
   name: my-component-name
@@ -54,7 +58,7 @@ discover existing functionality in the ecosystem.
 APIs are implemented by components and make their boundaries explicit. They
 might be defined using an RPC IDL (e.g. in Protobuf, GraphQL or similar), a data
 schema (e.g. in Avro, TFRecord or similar), or as code interfaces (e.g.
-framework APIs in Swift, Kotlin, Java, C++, Typescript etc). In any case, APIs
+framework APIs in Swift, Kotlin, Java, C++, TypeScript etc). In any case, APIs
 exposed by components need to be in a known machine-readable format so we can
 build further tooling and analysis on top.
 
@@ -63,7 +67,7 @@ wouldn't need their own descriptor files, but would be stored in the catalog
 somewhat like this (actual schema will evolve):
 
 ```yaml
-apiVersion: backstage.io/v1beta1
+apiVersion: backstage.io/v1alpha1
 kind: API
 metadata:
   name: my-component-api
@@ -97,7 +101,7 @@ files, but would be stored in the catalog somewhat like this (actual schema will
 evolve):
 
 ```yaml
-apiVersion: backstage.io/v1beta1
+apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
   name: my-component-db

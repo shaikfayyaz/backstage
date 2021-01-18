@@ -16,15 +16,21 @@
 
 import webpack, { Module, Plugin } from 'webpack';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
-import { BundlingOptions } from './types';
+import { svgrTemplate } from '../svgrTemplate';
 
 type Transforms = {
   loaders: Module['rules'];
   plugins: Plugin[];
 };
 
-export const transforms = (options: BundlingOptions): Transforms => {
+type TransformOptions = {
+  isDev: boolean;
+};
+
+export const transforms = (options: TransformOptions): Transforms => {
   const { isDev } = options;
+
+  const extraTransforms = isDev ? ['react-hot-loader'] : [];
 
   const loaders = [
     {
@@ -32,7 +38,8 @@ export const transforms = (options: BundlingOptions): Transforms => {
       exclude: /node_modules/,
       loader: require.resolve('@sucrase/webpack-loader'),
       options: {
-        transforms: ['typescript', 'jsx', 'react-hot-loader'],
+        transforms: ['typescript', 'jsx', ...extraTransforms],
+        production: !isDev,
       },
     },
     {
@@ -40,15 +47,40 @@ export const transforms = (options: BundlingOptions): Transforms => {
       exclude: /node_modules/,
       loader: require.resolve('@sucrase/webpack-loader'),
       options: {
-        transforms: ['jsx', 'react-hot-loader'],
+        transforms: ['jsx', ...extraTransforms],
+        production: !isDev,
       },
     },
     {
-      test: [/\.bmp$/, /\.gif$/, /\.jpe?g$/, /\.png$/, /\.frag/, /\.xml/],
+      test: [/\.icon\.svg$/],
+      use: [
+        {
+          loader: require.resolve('@sucrase/webpack-loader'),
+          options: {
+            transforms: ['jsx', ...extraTransforms],
+            production: !isDev,
+          },
+        },
+        {
+          loader: require.resolve('@svgr/webpack'),
+          options: { babel: false, template: svgrTemplate },
+        },
+      ],
+    },
+    {
+      test: [
+        /\.bmp$/,
+        /\.gif$/,
+        /\.jpe?g$/,
+        /\.png$/,
+        /\.frag/,
+        { test: /\.svg/, not: [/\.icon\.svg/] },
+        /\.xml/,
+      ],
       loader: require.resolve('url-loader'),
       options: {
         limit: 10000,
-        name: 'static/media/[name].[hash:8].[ext]',
+        name: 'static/[name].[hash:8].[ext]',
       },
     },
     {
@@ -80,8 +112,8 @@ export const transforms = (options: BundlingOptions): Transforms => {
   } else {
     plugins.push(
       new MiniCssExtractPlugin({
-        filename: '[name].[contenthash:8].css',
-        chunkFilename: '[name].[id].[contenthash:8].css',
+        filename: 'static/[name].[contenthash:8].css',
+        chunkFilename: 'static/[name].[id].[contenthash:8].css',
       }),
     );
   }

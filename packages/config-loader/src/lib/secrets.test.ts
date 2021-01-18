@@ -28,6 +28,7 @@ const ctx: ReaderContext = {
       'my-data.json': '{"a":{"b":{"c":42}}}',
       'my-data.yaml': 'some:\n yaml:\n  key: 7',
       'my-data.yml': 'different: { key: hello }',
+      'invalid.yaml': 'foo: [}',
     } as { [key: string]: string })[path];
 
     if (!content) {
@@ -55,21 +56,68 @@ describe('readSecret', () => {
   });
 
   it('should read data secrets', async () => {
+    // Deprecated object form
     await expect(
       readSecret({ data: 'my-data.json', path: 'a.b.c' }, ctx),
     ).resolves.toBe('42');
-
     await expect(
       readSecret({ data: 'my-data.yaml', path: 'some.yaml.key' }, ctx),
     ).resolves.toBe('7');
-
     await expect(
       readSecret({ data: 'my-data.yml', path: 'different.key' }, ctx),
     ).resolves.toBe('hello');
-
     await expect(
       readSecret({ data: 'no-data.yml', path: 'different.key' }, ctx),
     ).rejects.toThrow('File not found!');
+
+    // New format with path in fragment
+    await expect(readSecret({ data: 'my-data.json#a.b.c' }, ctx)).resolves.toBe(
+      '42',
+    );
+    await expect(
+      readSecret({ data: 'my-data.yaml#some.yaml.key' }, ctx),
+    ).resolves.toBe('7');
+    await expect(
+      readSecret({ data: 'my-data.yml#different.key' }, ctx),
+    ).resolves.toBe('hello');
+    await expect(
+      readSecret({ data: 'no-data.yml#different.key' }, ctx),
+    ).rejects.toThrow('File not found!');
+  });
+
+  it('should include extra files', async () => {
+    // New format with path in fragment
+    await expect(
+      readSecret({ include: 'my-data.json#a.b.c' }, ctx),
+    ).resolves.toBe(42);
+    await expect(
+      readSecret({ include: 'my-data.json#a.b' }, ctx),
+    ).resolves.toEqual({ c: 42 });
+    await expect(
+      readSecret({ include: 'my-data.yaml#some.yaml.key' }, ctx),
+    ).resolves.toBe(7);
+    await expect(readSecret({ include: 'my-data.yaml' }, ctx)).resolves.toEqual(
+      {
+        some: { yaml: { key: 7 } },
+      },
+    );
+    await expect(
+      readSecret({ include: 'my-data.yaml#' }, ctx),
+    ).resolves.toEqual({
+      some: { yaml: { key: 7 } },
+    });
+    await expect(
+      readSecret({ include: 'my-data.yml#different.key' }, ctx),
+    ).resolves.toBe('hello');
+    await expect(
+      readSecret({ include: 'no-data.yml#different.key' }, ctx),
+    ).rejects.toThrow('File not found!');
+    await expect(
+      readSecret({ include: 'my-data.yml#missing.key' }, ctx),
+    ).rejects.toThrow('Value is not an object at missing in my-data.yml');
+    await expect(readSecret({ include: 'invalid.yaml' }, ctx)).rejects.toThrow(
+      'Failed to parse included file invalid.yaml, YAMLSyntaxError: Flow sequence contains an unexpected }',
+    );
   });
 
   it('should reject invalid secrets', async () => {
@@ -83,7 +131,7 @@ describe('readSecret', () => {
       "Secret must contain one of 'file', 'env', 'data'",
     );
     await expect(readSecret({ data: 'no-data.yml' }, ctx)).rejects.toThrow(
-      'path is a required field',
+      "Invalid format for data secret value, must be of the form <filepath>#<datapath>, got 'no-data.yml'",
     );
     await expect(
       readSecret({ data: 'no-parser.js', path: '.' }, ctx),

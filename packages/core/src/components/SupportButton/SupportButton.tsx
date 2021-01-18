@@ -14,7 +14,12 @@
  * limitations under the License.
  */
 
-import React, { FC, Fragment, useState, MouseEventHandler } from 'react';
+import React, {
+  Fragment,
+  useState,
+  MouseEventHandler,
+  PropsWithChildren,
+} from 'react';
 import {
   Button,
   Link,
@@ -49,12 +54,12 @@ const useStyles = makeStyles(theme => ({
   },
 }));
 
-const SupportButton: FC<Props> = ({
+export const SupportButton = ({
   slackChannel = '#backstage',
   email = [],
   children,
-  // plugin,
-}) => {
+}: // plugin,
+PropsWithChildren<Props>) => {
   // TODO: get plugin manifest with hook
 
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -87,6 +92,7 @@ const SupportButton: FC<Props> = ({
         Support
       </Button>
       <Popover
+        data-testid="support-button-popover"
         open={popoverOpen}
         anchorEl={anchorEl}
         anchorOrigin={{
@@ -120,7 +126,8 @@ const SupportButton: FC<Props> = ({
                 <GroupIcon />
               </ListItemIcon>
               <ListItemText
-                primary="Support"
+                disableTypography
+                primary={<Typography>Support</Typography>}
                 secondary={
                   <div>
                     {slackChannels.map((channel, i) => (
@@ -137,7 +144,8 @@ const SupportButton: FC<Props> = ({
                 <GroupIcon />
               </ListItemIcon>
               <ListItemText
-                primary="Contact"
+                disableTypography
+                primary={<Typography>Contact</Typography>}
                 secondary={
                   <div>
                     {contactEmails.map((em, index) => (
@@ -155,5 +163,3 @@ const SupportButton: FC<Props> = ({
     </Fragment>
   );
 };
-
-export default SupportButton;

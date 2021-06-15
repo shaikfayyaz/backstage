@@ -6827,9 +6827,9 @@
     "@types/passport-oauth2" "*"
 
 "@types/passport-google-oauth20@^2.0.3":
-  version "2.0.3"
-  resolved "https://registry.npmjs.org/@types/passport-google-oauth20/-/passport-google-oauth20-2.0.3.tgz#f554ff6d39f395acff3f1d762e54462194dac8da"
-  integrity sha512-6EUEGzEg4acwowvgR/yVZIj8S2Kkwc6JmlY2/wnM1wJHNz20o7s1TIGrxnah8ymLgJasYDpy95P3TMMqlmetPw==
+  version "2.0.8"
+  resolved "https://registry.npmjs.org/@types/passport-google-oauth20/-/passport-google-oauth20-2.0.8.tgz#1054e51dc26b4d06a79db2b0f756ed280f0225f1"
+  integrity sha512-Lc+DYCCFeMVbodISydQLT6PjIlL0TcLup3HMiJ8RHHHBltArA3oC4qocyQH1OsEq5ovQ19PaKlpGqsNT8NYz1w==
   dependencies:
     "@types/express" "*"
     "@types/passport" "*"
